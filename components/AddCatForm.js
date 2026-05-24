@@ -5,6 +5,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../firebase';
 import { addDoc, collection } from 'firebase/firestore';
+import { getCatEmbedding } from '../services/aiMatch';
 
 export default function AddCatForm({ onClose, onSaved }) {
   const [image, setImage] = useState(null);
@@ -15,6 +16,7 @@ export default function AddCatForm({ onClose, onSaved }) {
   const [notes, setNotes] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [saving, setSaving] = useState(false);
+  const [savingStep, setSavingStep] = useState('');
 
   useEffect(() => {
     AsyncStorage.getItem('userPhone').then(p => setUserPhone(p || ''));
@@ -22,10 +24,7 @@ export default function AddCatForm({ onClose, onSaved }) {
 
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('ต้องการสิทธิ์', 'อนุญาตเข้าถึงรูปก่อน');
-      return;
-    }
+    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'อนุญาตเข้าถึงรูปก่อน'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7,
     });
@@ -34,10 +33,7 @@ export default function AddCatForm({ onClose, onSaved }) {
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('ต้องการสิทธิ์', 'อนุญาตใช้กล้องก่อน');
-      return;
-    }
+    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'อนุญาตใช้กล้องก่อน'); return; }
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true, aspect: [1, 1], quality: 0.7,
     });
@@ -53,26 +49,34 @@ export default function AddCatForm({ onClose, onSaved }) {
   };
 
   const handleSubmit = async () => {
-    // Validation
-    if (!image) {
-      Alert.alert('ขาดข้อมูล', 'กรุณาเลือกรูปแมว');
-      return;
-    }
+    if (!image) { Alert.alert('ขาดข้อมูล', 'กรุณาเลือกรูปแมว'); return; }
     if (!name.trim() || !color.trim()) {
-      Alert.alert('ขาดข้อมูล', 'กรุณากรอกชื่อและสี');
-      return;
+      Alert.alert('ขาดข้อมูล', 'กรุณากรอกชื่อและสี'); return;
     }
 
     setSaving(true);
     try {
-      // 1. Compress + convert to base64
+      // 1. Compress + base64
+      setSavingStep('กำลังบีบอัดรูป...');
       const compressed = await ImageManipulator.manipulateAsync(
         image,
         [{ resize: { width: 400 } }],
         { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
 
-      // 2. Save to Firestore
+      // 2. AI embedding (fail gracefully)
+      setSavingStep('🤖 AI กำลังวิเคราะห์รูป...');
+      let embedding = null;
+      try {
+        embedding = await getCatEmbedding(compressed.uri);
+        console.log('Got embedding length:', embedding?.length);
+      } catch (aiError) {
+        console.log('AI embedding failed:', aiError.message);
+        // Continue without embedding — cat will still save
+      }
+
+      // 3. Save to Firestore
+      setSavingStep('กำลังบันทึก...');
       await addDoc(collection(db, 'cats'), {
         ownerPhone: userPhone,
         name: name.trim(),
@@ -81,11 +85,13 @@ export default function AddCatForm({ onClose, onSaved }) {
         age: age.trim(),
         notes: notes.trim(),
         imageBase64: compressed.base64,
+        imageEmbedding: embedding,
         status: 'home',
         createdAt: new Date(),
       });
 
-      Alert.alert('สำเร็จ! 🎉', `เพิ่ม "${name}" เรียบร้อย`, [
+      const aiStatus = embedding ? '✅ AI วิเคราะห์เรียบร้อย' : '⚠️ บันทึกแล้ว แต่ AI ไม่ทำงาน';
+      Alert.alert('สำเร็จ! 🎉', `เพิ่ม "${name}" เรียบร้อย\n${aiStatus}`, [
         { text: 'OK', onPress: () => {
           if (onSaved) onSaved();
           onClose();
@@ -95,6 +101,7 @@ export default function AddCatForm({ onClose, onSaved }) {
       console.log('Save error:', error);
       Alert.alert('Error', error.message);
       setSaving(false);
+      setSavingStep('');
     }
   };
 
@@ -133,24 +140,27 @@ export default function AddCatForm({ onClose, onSaved }) {
         multiline numberOfLines={3} editable={!saving}
       />
 
+      {saving && savingStep && (
+        <View style={styles.savingStatus}>
+          <ActivityIndicator size="small" color="#FF6B35" />
+          <Text style={styles.savingStatusText}>{savingStep}</Text>
+        </View>
+      )}
+
       <View style={styles.buttonRow}>
-        <TouchableOpacity 
-          style={[styles.button, styles.cancelButton]} 
+        <TouchableOpacity
+          style={[styles.button, styles.cancelButton]}
           onPress={onClose}
           disabled={saving}
         >
           <Text style={styles.cancelButtonText}>ยกเลิก</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.button, styles.saveButton, saving && styles.buttonDisabled]} 
+        <TouchableOpacity
+          style={[styles.button, styles.saveButton, saving && styles.buttonDisabled]}
           onPress={handleSubmit}
           disabled={saving}
         >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>บันทึก</Text>
-          )}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>บันทึก</Text>}
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -175,6 +185,11 @@ const styles = StyleSheet.create({
     padding: 12, fontSize: 16, marginBottom: 16, backgroundColor: '#fafafa',
   },
   textArea: { height: 80, textAlignVertical: 'top' },
+  savingStatus: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    padding: 12, backgroundColor: '#FFF5F0', borderRadius: 8, gap: 10, marginBottom: 12,
+  },
+  savingStatusText: { color: '#FF6B35', fontSize: 14, fontWeight: 'bold' },
   buttonRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
   button: { flex: 1, height: 50, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   buttonDisabled: { opacity: 0.5 },
