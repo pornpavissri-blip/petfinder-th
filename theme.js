@@ -24,6 +24,8 @@ export const colors = {
   foundSoft: '#E8F1FE',
 
   warn: '#FFB020',
+  reward: '#E8920C',
+  rewardSoft: '#FFF4E0',
   white: '#FFFFFF',
 };
 

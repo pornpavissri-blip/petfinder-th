@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
+import { seedDemoCats, clearDemoCats } from '../services/demoSeed';
 import { colors, radius, shadow, shadowSoft } from '../theme';
 
 export default function ProfileScreen({ onLogout }) {
@@ -19,6 +20,43 @@ export default function ProfileScreen({ onLogout }) {
   const [stats, setStats] = useState({ total: 0, lost: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+
+  const runSeed = async () => {
+    setSeeding(true);
+    try {
+      const n = await seedDemoCats(phone, 6);
+      await load();
+      Alert.alert(
+        n > 0 ? 'สร้างแล้ว 🐱' : 'ไม่สำเร็จ',
+        n > 0
+          ? `เพิ่มแมวหายจำลอง ${n} ตัว กระจายรอบตำแหน่งคุณ\nไปดูที่หน้าแผนที่ได้เลย (อนุญาต GPS ด้วยนะ)`
+          : 'โหลดรูปแมวไม่ได้ ลองเช็กเน็ตแล้วลองใหม่'
+      );
+    } catch (e) {
+      console.log('Seed error:', e);
+      Alert.alert('ผิดพลาด', 'ลองใหม่อีกครั้ง (ต้องต่อเน็ต)');
+    }
+    setSeeding(false);
+  };
+
+  const runClear = () => {
+    Alert.alert('ล้างข้อมูลจำลอง', 'ลบแมวหายจำลองทั้งหมด?', [
+      { text: 'ยกเลิก', style: 'cancel' },
+      {
+        text: 'ลบ', style: 'destructive',
+        onPress: async () => {
+          setSeeding(true);
+          try {
+            const n = await clearDemoCats();
+            await load();
+            Alert.alert('ล้างแล้ว', `ลบข้อมูลจำลอง ${n} ตัว`);
+          } catch (e) { Alert.alert('ผิดพลาด', 'ลองใหม่'); }
+          setSeeding(false);
+        },
+      },
+    ]);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -138,6 +176,24 @@ export default function ProfileScreen({ onLogout }) {
           </View>
         </View>
 
+        {/* demo tools */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🧪 เครื่องมือเดโม่</Text>
+          <Text style={styles.demoHint}>สร้างแมวหายจำลองกระจายบนแผนที่ สำหรับนำเสนอ</Text>
+          <TouchableOpacity style={styles.seedBtn} onPress={runSeed} disabled={seeding} activeOpacity={0.85}>
+            {seeding ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="sparkles" size={18} color="#fff" />
+                <Text style={styles.seedText}>สร้างแมวหายจำลอง (6 ตัว)</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.clearBtn} onPress={runClear} disabled={seeding}>
+            <Ionicons name="trash-outline" size={16} color={colors.sub} />
+            <Text style={styles.clearText}>ล้างข้อมูลจำลอง</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* logout */}
         <TouchableOpacity style={styles.logout} onPress={confirmLogout} activeOpacity={0.85}>
           <Ionicons name="log-out-outline" size={20} color={colors.lost} />
@@ -180,4 +236,10 @@ const styles = StyleSheet.create({
 
   logout: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.lostSoft, height: 54, borderRadius: radius.md, marginTop: 24 },
   logoutText: { color: colors.lost, fontWeight: '800', fontSize: 16 },
+
+  demoHint: { fontSize: 12.5, color: colors.sub, marginTop: -6, marginBottom: 12, lineHeight: 18 },
+  seedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, height: 50, borderRadius: radius.md },
+  seedText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 42, marginTop: 8 },
+  clearText: { color: colors.sub, fontWeight: '600', fontSize: 13.5 },
 });

@@ -6,7 +6,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -14,7 +13,7 @@ import { colors, radius, shadow } from '../theme';
 
 export const CAT_COLORS = ['ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ลายเสือ', 'สามสี', 'ขาวดำ'];
 
-export default function AddCatForm({ onClose, onAdded }) {
+export default function AddCatForm({ onAdded }) {
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [name, setName] = useState('');
@@ -41,10 +40,7 @@ export default function AddCatForm({ onClose, onAdded }) {
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงคลังรูปภาพ');
-      return;
-    }
+    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงคลังรูปภาพ'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
@@ -53,25 +49,9 @@ export default function AddCatForm({ onClose, onAdded }) {
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้ใช้กล้อง');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true, aspect: [1, 1], quality: 0.8,
-    });
+    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้ใช้กล้อง'); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
     if (!result.canceled) processImage(result.assets[0].uri);
-  };
-
-  const getCoords = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return null;
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      return { homeLat: pos.coords.latitude, homeLng: pos.coords.longitude };
-    } catch (e) {
-      return null;
-    }
   };
 
   const handleSave = async () => {
@@ -82,9 +62,7 @@ export default function AddCatForm({ onClose, onAdded }) {
     setSaving(true);
     try {
       const ownerPhone = await AsyncStorage.getItem('userPhone');
-      const coords = await getCoords();
-
-      const data = {
+      await addDoc(collection(db, 'cats'), {
         ownerPhone,
         name: name.trim(),
         color,
@@ -94,10 +72,7 @@ export default function AddCatForm({ onClose, onAdded }) {
         imageBase64,
         status: 'home',
         createdAt: serverTimestamp(),
-      };
-      if (coords) { data.homeLat = coords.homeLat; data.homeLng = coords.homeLng; }
-
-      await addDoc(collection(db, 'cats'), data);
+      });
       Alert.alert('สำเร็จ! 🎉', `เพิ่มน้อง "${name.trim()}" เรียบร้อยแล้ว`);
       onAdded?.();
     } catch (e) {
@@ -108,12 +83,8 @@ export default function AddCatForm({ onClose, onAdded }) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Image */}
         {imageUri ? (
           <TouchableOpacity onPress={pickImage} style={styles.imageBox} activeOpacity={0.9}>
             <Image source={{ uri: imageUri }} style={styles.image} />
@@ -139,82 +110,45 @@ export default function AddCatForm({ onClose, onAdded }) {
           </View>
         )}
 
-        {/* Name */}
         <Text style={styles.label}>ชื่อน้องแมว *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="เช่น สมโชค"
-          placeholderTextColor={colors.faint}
-          value={name}
-          onChangeText={setName}
-        />
+        <TextInput style={styles.input} placeholder="เช่น สมโชค" placeholderTextColor={colors.faint} value={name} onChangeText={setName} />
 
-        {/* Color chips */}
         <Text style={styles.label}>สี *</Text>
         <View style={styles.chips}>
           {CAT_COLORS.map((c) => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.chip, color === c && styles.chipActive]}
-              onPress={() => setColor(c)}
-            >
+            <TouchableOpacity key={c} style={[styles.chip, color === c && styles.chipActive]} onPress={() => setColor(c)}>
               <Text style={[styles.chipText, color === c && styles.chipTextActive]}>{c}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Breed + Age */}
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>พันธุ์ (ถ้ามี)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="เช่น วิเชียรมาศ"
-              placeholderTextColor={colors.faint}
-              value={breed}
-              onChangeText={setBreed}
-            />
+            <TextInput style={styles.input} placeholder="เช่น วิเชียรมาศ" placeholderTextColor={colors.faint} value={breed} onChangeText={setBreed} />
           </View>
           <View style={{ width: 110 }}>
             <Text style={styles.label}>อายุ</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="เช่น 2 ปี"
-              placeholderTextColor={colors.faint}
-              value={age}
-              onChangeText={setAge}
-            />
+            <TextInput style={styles.input} placeholder="2 ปี" placeholderTextColor={colors.faint} value={age} onChangeText={setAge} />
           </View>
         </View>
 
-        {/* Notes */}
         <Text style={styles.label}>ลักษณะเด่น / หมายเหตุ</Text>
         <TextInput
           style={[styles.input, styles.textarea]}
           placeholder="เช่น มีจุดขาวที่อก ใส่ปลอกคอสีฟ้า ขี้อ้อน"
           placeholderTextColor={colors.faint}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
+          value={notes} onChangeText={setNotes} multiline
         />
 
-        {/* Save */}
-        <TouchableOpacity
-          style={[styles.save, saving && { opacity: 0.7 }]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
+        <TouchableOpacity style={[styles.save, saving && { opacity: 0.7 }]} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+          {saving ? <ActivityIndicator color="#fff" /> : (
             <>
               <Ionicons name="checkmark-circle" size={20} color="#fff" />
               <Text style={styles.saveText}>บันทึกน้องแมว</Text>
             </>
           )}
         </TouchableOpacity>
-
         <View style={{ height: 40 }} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -223,47 +157,24 @@ export default function AddCatForm({ onClose, onAdded }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, padding: 20 },
-
   imageBox: { borderRadius: radius.lg, overflow: 'hidden', ...shadow },
   image: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
-  imageEdit: {
-    position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full,
-  },
+  imageEdit: { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full },
   imageEditText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-
-  imagePlaceholder: {
-    backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: 32, alignItems: 'center',
-    borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed',
-  },
+  imagePlaceholder: { backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: 32, alignItems: 'center', borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed' },
   placeholderText: { color: colors.sub, fontSize: 15, fontWeight: '600', marginTop: 10, marginBottom: 16 },
   imageButtons: { flexDirection: 'row', gap: 12 },
-  imgBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.primarySoft,
-    paddingHorizontal: 18, paddingVertical: 11, borderRadius: radius.full,
-  },
+  imgBtn: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.primarySoft, paddingHorizontal: 18, paddingVertical: 11, borderRadius: radius.full },
   imgBtnText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
-
   label: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 20, marginBottom: 8 },
-  input: {
-    backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: 16, height: 52,
-    fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border,
-  },
+  input: { backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: 16, height: 52, fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border },
   textarea: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 12 },
-
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  chip: {
-    paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full,
-    backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border,
-  },
+  chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.sub, fontWeight: '600', fontSize: 14 },
   chipTextActive: { color: '#fff' },
-
-  save: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: colors.primary, height: 56, borderRadius: radius.md, marginTop: 28,
-  },
+  save: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, height: 56, borderRadius: radius.md, marginTop: 28 },
   saveText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 });
