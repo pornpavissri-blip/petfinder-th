@@ -1,42 +1,53 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
 import PhoneEntry from './components/PhoneEntry';
 import MainTabs from './components/MainTabs';
+import { colors } from './theme';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [userPhone, setUserPhone] = useState(null);
 
   useEffect(() => {
-    checkUser();
+    (async () => {
+      try {
+        const phone = await AsyncStorage.getItem('userPhone');
+        if (phone) setUserPhone(phone);
+      } catch (e) {
+        console.log('Error checking user:', e);
+      }
+      setLoading(false);
+    })();
   }, []);
 
-  const checkUser = async () => {
-    try {
-      const phone = await AsyncStorage.getItem('userPhone');
-      if (phone) setUserPhone(phone);
-    } catch (error) {
-      console.log('Error checking user:', error);
-    }
-    setLoading(false);
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem('userPhone');
+    setUserPhone(null);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#FF6B35" />
-      </View>
-    );
-  }
-
-  if (!userPhone) {
-    return <PhoneEntry onLogin={setUserPhone} />;
-  }
-
-  return <MainTabs />;
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      {loading ? (
+        <View style={styles.splash}>
+          <Text style={styles.logo}>🐱</Text>
+          <Text style={styles.brand}>PetFinder</Text>
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 20 }} />
+        </View>
+      ) : !userPhone ? (
+        <PhoneEntry onLogin={setUserPhone} />
+      ) : (
+        <MainTabs onLogout={handleLogout} />
+      )}
+    </SafeAreaProvider>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  splash: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  logo: { fontSize: 72 },
+  brand: { fontSize: 26, fontWeight: '800', color: colors.text, marginTop: 8, letterSpacing: 0.5 },
 });

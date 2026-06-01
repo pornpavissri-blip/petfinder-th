@@ -1,200 +1,269 @@
-import { useState, useEffect } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, Image, Alert, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import {
+  StyleSheet, Text, View, TextInput, TouchableOpacity, Image,
+  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { addDoc, collection } from 'firebase/firestore';
-import { getCatEmbedding } from '../services/aiMatch';
+import { colors, radius, shadow } from '../theme';
 
-export default function AddCatForm({ onClose, onSaved }) {
-  const [image, setImage] = useState(null);
+export const CAT_COLORS = ['ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ลายเสือ', 'สามสี', 'ขาวดำ'];
+
+export default function AddCatForm({ onClose, onAdded }) {
+  const [imageUri, setImageUri] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
   const [name, setName] = useState('');
-  const [color, setColor] = useState('');
-  const [age, setAge] = useState('');
+  const [color, setColor] = useState(null);
   const [breed, setBreed] = useState('');
+  const [age, setAge] = useState('');
   const [notes, setNotes] = useState('');
-  const [userPhone, setUserPhone] = useState('');
   const [saving, setSaving] = useState(false);
-  const [savingStep, setSavingStep] = useState('');
 
-  useEffect(() => {
-    AsyncStorage.getItem('userPhone').then(p => setUserPhone(p || ''));
-  }, []);
+  const processImage = async (uri) => {
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 600 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      setImageUri(result.uri);
+      setImageBase64(result.base64);
+    } catch (e) {
+      console.log('Image process error:', e);
+      Alert.alert('รูปภาพมีปัญหา', 'ลองเลือกรูปใหม่อีกครั้ง');
+    }
+  };
 
-  const pickFromGallery = async () => {
+  const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'อนุญาตเข้าถึงรูปก่อน'); return; }
+    if (status !== 'granted') {
+      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงคลังรูปภาพ');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7,
+      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
-    if (!result.canceled) setImage(result.assets[0].uri);
+    if (!result.canceled) processImage(result.assets[0].uri);
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'อนุญาตใช้กล้องก่อน'); return; }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true, aspect: [1, 1], quality: 0.7,
-    });
-    if (!result.canceled) setImage(result.assets[0].uri);
-  };
-
-  const handlePickImage = () => {
-    Alert.alert('เลือกรูปแมว', 'เลือกแหล่งที่มา', [
-      { text: '📷 ถ่ายรูป', onPress: takePhoto },
-      { text: '🖼️ แกลเลอรี', onPress: pickFromGallery },
-      { text: 'ยกเลิก', style: 'cancel' },
-    ]);
-  };
-
-  const handleSubmit = async () => {
-    if (!image) { Alert.alert('ขาดข้อมูล', 'กรุณาเลือกรูปแมว'); return; }
-    if (!name.trim() || !color.trim()) {
-      Alert.alert('ขาดข้อมูล', 'กรุณากรอกชื่อและสี'); return;
+    if (status !== 'granted') {
+      Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้ใช้กล้อง');
+      return;
     }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+    });
+    if (!result.canceled) processImage(result.assets[0].uri);
+  };
+
+  const getCoords = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      return { homeLat: pos.coords.latitude, homeLng: pos.coords.longitude };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleSave = async () => {
+    if (!imageBase64) { Alert.alert('ยังไม่มีรูป', 'กรุณาเพิ่มรูปน้องแมว'); return; }
+    if (!name.trim()) { Alert.alert('ยังไม่มีชื่อ', 'กรุณาตั้งชื่อน้องแมว'); return; }
+    if (!color) { Alert.alert('ยังไม่เลือกสี', 'กรุณาเลือกสีน้องแมว'); return; }
 
     setSaving(true);
     try {
-      // 1. Compress + base64
-      setSavingStep('กำลังบีบอัดรูป...');
-      const compressed = await ImageManipulator.manipulateAsync(
-        image,
-        [{ resize: { width: 400 } }],
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      );
+      const ownerPhone = await AsyncStorage.getItem('userPhone');
+      const coords = await getCoords();
 
-      // 2. AI embedding (fail gracefully)
-      setSavingStep('🤖 AI กำลังวิเคราะห์รูป...');
-      let embedding = null;
-      try {
-        embedding = await getCatEmbedding(compressed.uri);
-        console.log('Got embedding length:', embedding?.length);
-      } catch (aiError) {
-        console.log('AI embedding failed:', aiError.message);
-        // Continue without embedding — cat will still save
-      }
-
-      // 3. Save to Firestore
-      setSavingStep('กำลังบันทึก...');
-      await addDoc(collection(db, 'cats'), {
-        ownerPhone: userPhone,
+      const data = {
+        ownerPhone,
         name: name.trim(),
-        color: color.trim(),
+        color,
         breed: breed.trim(),
         age: age.trim(),
         notes: notes.trim(),
-        imageBase64: compressed.base64,
-        imageEmbedding: embedding,
+        imageBase64,
         status: 'home',
-        createdAt: new Date(),
-      });
+        createdAt: serverTimestamp(),
+      };
+      if (coords) { data.homeLat = coords.homeLat; data.homeLng = coords.homeLng; }
 
-      const aiStatus = embedding ? '✅ AI วิเคราะห์เรียบร้อย' : '⚠️ บันทึกแล้ว แต่ AI ไม่ทำงาน';
-      Alert.alert('สำเร็จ! 🎉', `เพิ่ม "${name}" เรียบร้อย\n${aiStatus}`, [
-        { text: 'OK', onPress: () => {
-          if (onSaved) onSaved();
-          onClose();
-        }}
-      ]);
-    } catch (error) {
-      console.log('Save error:', error);
-      Alert.alert('Error', error.message);
+      await addDoc(collection(db, 'cats'), data);
+      Alert.alert('สำเร็จ! 🎉', `เพิ่มน้อง "${name.trim()}" เรียบร้อยแล้ว`);
+      onAdded?.();
+    } catch (e) {
+      console.log('Save error:', e);
+      Alert.alert('บันทึกไม่สำเร็จ', 'ลองใหม่อีกครั้ง');
       setSaving(false);
-      setSavingStep('');
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.header}>เพิ่มน้องแมวใหม่ 🐱</Text>
-
-      <TouchableOpacity style={styles.imageBox} onPress={handlePickImage} disabled={saving}>
-        {image ? (
-          <Image source={{ uri: image }} style={styles.imagePreview} />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+        {/* Image */}
+        {imageUri ? (
+          <TouchableOpacity onPress={pickImage} style={styles.imageBox} activeOpacity={0.9}>
+            <Image source={{ uri: imageUri }} style={styles.image} />
+            <View style={styles.imageEdit}>
+              <Ionicons name="camera" size={16} color="#fff" />
+              <Text style={styles.imageEditText}>เปลี่ยนรูป</Text>
+            </View>
+          </TouchableOpacity>
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Text style={styles.imageEmoji}>📷</Text>
-            <Text style={styles.imageHint}>แตะเพื่อเลือกรูปแมว</Text>
+            <Ionicons name="image-outline" size={48} color={colors.faint} />
+            <Text style={styles.placeholderText}>เพิ่มรูปน้องแมว</Text>
+            <View style={styles.imageButtons}>
+              <TouchableOpacity style={styles.imgBtn} onPress={takePhoto}>
+                <Ionicons name="camera" size={18} color={colors.primary} />
+                <Text style={styles.imgBtnText}>ถ่ายรูป</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.imgBtn} onPress={pickImage}>
+                <Ionicons name="images" size={18} color={colors.primary} />
+                <Text style={styles.imgBtnText}>เลือกจากคลัง</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
-      </TouchableOpacity>
 
-      <Text style={styles.label}>ชื่อน้อง *</Text>
-      <TextInput style={styles.input} placeholder="เช่น ส้ม, ขาว" value={name} onChangeText={setName} editable={!saving} />
+        {/* Name */}
+        <Text style={styles.label}>ชื่อน้องแมว *</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="เช่น สมโชค"
+          placeholderTextColor={colors.faint}
+          value={name}
+          onChangeText={setName}
+        />
 
-      <Text style={styles.label}>สี *</Text>
-      <TextInput style={styles.input} placeholder="เช่น ส้ม, ดำ" value={color} onChangeText={setColor} editable={!saving} />
-
-      <Text style={styles.label}>พันธุ์</Text>
-      <TextInput style={styles.input} placeholder="เช่น เปอร์เซีย, ไทย" value={breed} onChangeText={setBreed} editable={!saving} />
-
-      <Text style={styles.label}>อายุ (ปี)</Text>
-      <TextInput style={styles.input} placeholder="เช่น 2" value={age} onChangeText={setAge} keyboardType="numeric" editable={!saving} />
-
-      <Text style={styles.label}>หมายเหตุ</Text>
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        placeholder="ลักษณะเด่น, นิสัย"
-        value={notes} onChangeText={setNotes}
-        multiline numberOfLines={3} editable={!saving}
-      />
-
-      {saving && savingStep && (
-        <View style={styles.savingStatus}>
-          <ActivityIndicator size="small" color="#FF6B35" />
-          <Text style={styles.savingStatusText}>{savingStep}</Text>
+        {/* Color chips */}
+        <Text style={styles.label}>สี *</Text>
+        <View style={styles.chips}>
+          {CAT_COLORS.map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[styles.chip, color === c && styles.chipActive]}
+              onPress={() => setColor(c)}
+            >
+              <Text style={[styles.chipText, color === c && styles.chipTextActive]}>{c}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      )}
 
-      <View style={styles.buttonRow}>
+        {/* Breed + Age */}
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>พันธุ์ (ถ้ามี)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="เช่น วิเชียรมาศ"
+              placeholderTextColor={colors.faint}
+              value={breed}
+              onChangeText={setBreed}
+            />
+          </View>
+          <View style={{ width: 110 }}>
+            <Text style={styles.label}>อายุ</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="เช่น 2 ปี"
+              placeholderTextColor={colors.faint}
+              value={age}
+              onChangeText={setAge}
+            />
+          </View>
+        </View>
+
+        {/* Notes */}
+        <Text style={styles.label}>ลักษณะเด่น / หมายเหตุ</Text>
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          placeholder="เช่น มีจุดขาวที่อก ใส่ปลอกคอสีฟ้า ขี้อ้อน"
+          placeholderTextColor={colors.faint}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+        />
+
+        {/* Save */}
         <TouchableOpacity
-          style={[styles.button, styles.cancelButton]}
-          onPress={onClose}
+          style={[styles.save, saving && { opacity: 0.7 }]}
+          onPress={handleSave}
           disabled={saving}
+          activeOpacity={0.85}
         >
-          <Text style={styles.cancelButtonText}>ยกเลิก</Text>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Text style={styles.saveText}>บันทึกน้องแมว</Text>
+            </>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.saveButton, saving && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={saving}
-        >
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>บันทึก</Text>}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20 },
-  header: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  imageBox: { width: '100%', height: 220, marginBottom: 20, borderRadius: 12, overflow: 'hidden' },
+  container: { flex: 1, backgroundColor: colors.bg, padding: 20 },
+
+  imageBox: { borderRadius: radius.lg, overflow: 'hidden', ...shadow },
+  image: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
+  imageEdit: {
+    position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full,
+  },
+  imageEditText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+
   imagePlaceholder: {
-    flex: 1, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: '#ddd', borderStyle: 'dashed', borderRadius: 12,
+    backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: 32, alignItems: 'center',
+    borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed',
   },
-  imageEmoji: { fontSize: 48, marginBottom: 8 },
-  imageHint: { color: '#999', fontSize: 14 },
-  imagePreview: { width: '100%', height: '100%' },
-  label: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#333' },
+  placeholderText: { color: colors.sub, fontSize: 15, fontWeight: '600', marginTop: 10, marginBottom: 16 },
+  imageButtons: { flexDirection: 'row', gap: 12 },
+  imgBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: colors.primarySoft,
+    paddingHorizontal: 18, paddingVertical: 11, borderRadius: radius.full,
+  },
+  imgBtnText: { color: colors.primary, fontWeight: '700', fontSize: 14 },
+
+  label: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 20, marginBottom: 8 },
   input: {
-    borderWidth: 1, borderColor: '#ddd', borderRadius: 8,
-    padding: 12, fontSize: 16, marginBottom: 16, backgroundColor: '#fafafa',
+    backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: 16, height: 52,
+    fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border,
   },
-  textArea: { height: 80, textAlignVertical: 'top' },
-  savingStatus: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    padding: 12, backgroundColor: '#FFF5F0', borderRadius: 8, gap: 10, marginBottom: 12,
+  textarea: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
+  row: { flexDirection: 'row', gap: 12 },
+
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
+  chip: {
+    paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full,
+    backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border,
   },
-  savingStatusText: { color: '#FF6B35', fontSize: 14, fontWeight: 'bold' },
-  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  button: { flex: 1, height: 50, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  buttonDisabled: { opacity: 0.5 },
-  cancelButton: { backgroundColor: '#f0f0f0' },
-  cancelButtonText: { color: '#666', fontSize: 16, fontWeight: 'bold' },
-  saveButton: { backgroundColor: '#FF6B35' },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.sub, fontWeight: '600', fontSize: 14 },
+  chipTextActive: { color: '#fff' },
+
+  save: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: colors.primary, height: 56, borderRadius: radius.md, marginTop: 28,
+  },
+  saveText: { color: '#fff', fontSize: 17, fontWeight: '800' },
 });

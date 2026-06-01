@@ -1,33 +1,50 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import SearchScreen from '../screens/SearchScreen';
+import { Platform } from 'react-native';
 import MyCatsScreen from '../screens/MyCatsScreen';
+import SearchScreen from '../screens/SearchScreen';
+import MapScreen from '../screens/MapScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import { colors } from '../theme';
 
 const Tab = createBottomTabNavigator();
 
-export default function MainTabs() {
+const ICONS = {
+  MyCats: ['paw', 'paw-outline'],
+  Search: ['search', 'search-outline'],
+  Map: ['map', 'map-outline'],
+  Profile: ['person', 'person-outline'],
+};
+
+export default function MainTabs({ onLogout }) {
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName;
-            if (route.name === 'Search') iconName = focused ? 'search' : 'search-outline';
-            else if (route.name === 'MyCats') iconName = focused ? 'paw' : 'paw-outline';
-            else if (route.name === 'Profile') iconName = focused ? 'person' : 'person-outline';
-            return <Ionicons name={iconName} size={size} color={color} />;
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.faint,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '700', marginBottom: Platform.OS === 'ios' ? 0 : 6 },
+          tabBarStyle: {
+            height: Platform.OS === 'ios' ? 88 : 66,
+            paddingTop: 8,
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            borderTopWidth: 1,
           },
-          tabBarActiveTintColor: '#FF6B35',
-          tabBarInactiveTintColor: '#999',
-          headerStyle: { backgroundColor: '#FF6B35' },
-          headerTintColor: '#fff',
+          tabBarIcon: ({ focused, color, size }) => {
+            const [on, off] = ICONS[route.name];
+            return <Ionicons name={focused ? on : off} size={size} color={color} />;
+          },
         })}
       >
-        <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'หาแมว' }} />
         <Tab.Screen name="MyCats" component={MyCatsScreen} options={{ title: 'แมวของฉัน' }} />
-        <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'โปรไฟล์' }} />
+        <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'ตามหา' }} />
+        <Tab.Screen name="Map" component={MapScreen} options={{ title: 'แผนที่' }} />
+        <Tab.Screen name="Profile" options={{ title: 'โปรไฟล์' }}>
+          {() => <ProfileScreen onLogout={onLogout} />}
+        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
