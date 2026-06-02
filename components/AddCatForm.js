@@ -9,19 +9,23 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import CatCamera from './CatCamera';
 import { colors, radius, shadow } from '../theme';
 
 export const CAT_COLORS = ['ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ลายเสือ', 'สามสี', 'ขาวดำ'];
+export const SEX_OPTIONS = ['ผู้', 'เมีย', 'ไม่ทราบ'];
 
 export default function AddCatForm({ onAdded }) {
   const [imageUri, setImageUri] = useState(null);
   const [imageBase64, setImageBase64] = useState(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(null);
+  const [sex, setSex] = useState(null);
   const [breed, setBreed] = useState('');
   const [age, setAge] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   const processImage = async (uri) => {
     try {
@@ -47,13 +51,6 @@ export default function AddCatForm({ onAdded }) {
     if (!result.canceled) processImage(result.assets[0].uri);
   };
 
-  const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้ใช้กล้อง'); return; }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
-    if (!result.canceled) processImage(result.assets[0].uri);
-  };
-
   const handleSave = async () => {
     if (!imageBase64) { Alert.alert('ยังไม่มีรูป', 'กรุณาเพิ่มรูปน้องแมว'); return; }
     if (!name.trim()) { Alert.alert('ยังไม่มีชื่อ', 'กรุณาตั้งชื่อน้องแมว'); return; }
@@ -66,6 +63,7 @@ export default function AddCatForm({ onAdded }) {
         ownerPhone,
         name: name.trim(),
         color,
+        sex: sex || 'ไม่ทราบ',
         breed: breed.trim(),
         age: age.trim(),
         notes: notes.trim(),
@@ -86,11 +84,11 @@ export default function AddCatForm({ onAdded }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
         {imageUri ? (
-          <TouchableOpacity onPress={pickImage} style={styles.imageBox} activeOpacity={0.9}>
+          <TouchableOpacity onPress={() => setShowCamera(true)} style={styles.imageBox} activeOpacity={0.9}>
             <Image source={{ uri: imageUri }} style={styles.image} />
             <View style={styles.imageEdit}>
               <Ionicons name="camera" size={16} color="#fff" />
-              <Text style={styles.imageEditText}>เปลี่ยนรูป</Text>
+              <Text style={styles.imageEditText}>ถ่ายใหม่</Text>
             </View>
           </TouchableOpacity>
         ) : (
@@ -98,7 +96,7 @@ export default function AddCatForm({ onAdded }) {
             <Ionicons name="image-outline" size={48} color={colors.faint} />
             <Text style={styles.placeholderText}>เพิ่มรูปน้องแมว</Text>
             <View style={styles.imageButtons}>
-              <TouchableOpacity style={styles.imgBtn} onPress={takePhoto}>
+              <TouchableOpacity style={styles.imgBtn} onPress={() => setShowCamera(true)}>
                 <Ionicons name="camera" size={18} color={colors.primary} />
                 <Text style={styles.imgBtnText}>ถ่ายรูป</Text>
               </TouchableOpacity>
@@ -120,6 +118,20 @@ export default function AddCatForm({ onAdded }) {
               <Text style={[styles.chipText, color === c && styles.chipTextActive]}>{c}</Text>
             </TouchableOpacity>
           ))}
+        </View>
+
+        <Text style={styles.label}>เพศ</Text>
+        <View style={styles.chips}>
+          {SEX_OPTIONS.map((s) => {
+            const icon = s === 'ผู้' ? 'male' : s === 'เมีย' ? 'female' : 'help';
+            const active = sex === s;
+            return (
+              <TouchableOpacity key={s} style={[styles.chip, active && styles.chipActive]} onPress={() => setSex(s)}>
+                <Ionicons name={icon} size={14} color={active ? '#fff' : colors.sub} style={{ marginRight: 5 }} />
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{s}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.row}>
@@ -150,6 +162,13 @@ export default function AddCatForm({ onAdded }) {
           )}
         </TouchableOpacity>
         <View style={{ height: 40 }} />
+
+        {/* กล้องในแอป + กรอบเล็งหน้าแมว */}
+        <CatCamera
+          visible={showCamera}
+          onClose={() => setShowCamera(false)}
+          onCapture={(uri) => { setShowCamera(false); processImage(uri); }}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -171,7 +190,7 @@ const styles = StyleSheet.create({
   textarea: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },
+  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.sub, fontWeight: '600', fontSize: 14 },
   chipTextActive: { color: '#fff' },

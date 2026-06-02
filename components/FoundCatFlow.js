@@ -10,6 +10,7 @@ import { db } from '../firebase';
 import { findMatches } from '../services/aiMatch';
 import { getCurrentCoords } from '../services/location';
 import { CAT_COLORS } from './AddCatForm';
+import MapPicker from './MapPicker';
 import { colors, radius, shadow } from '../theme';
 
 export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onBack, onPinnedDone }) {
@@ -18,6 +19,11 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
   const [results, setResults] = useState([]);
   const [pinning, setPinning] = useState(false);
   const [pinnedInfo, setPinnedInfo] = useState(null);
+
+  // ---- ตำแหน่งที่เจอแมว ----
+  const [locMode, setLocMode] = useState('current'); // current | manual
+  const [picked, setPicked] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   const scan = async (c) => {
     setColor(c);
@@ -29,6 +35,10 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
   };
 
   const pin = async (confidence) => {
+    if (locMode === 'manual' && !picked) {
+      Alert.alert('ยังไม่ได้เลือกตำแหน่ง', 'แตะ "ปักจุดเอง" แล้วเลือกจุดบนแผนที่ก่อน');
+      return;
+    }
     setPinning(true);
     try {
       // ย่อรูปที่ถ่าย → base64 เก็บไว้โชว์บนแผนที่
@@ -36,7 +46,12 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
         foundImageUri, [{ resize: { width: 600 } }],
         { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
-      const coords = await getCurrentCoords();
+
+      // ใช้ตำแหน่งตามที่เลือก
+      let coords;
+      if (locMode === 'manual' && picked) coords = picked;
+      else coords = await getCurrentCoords();
+
       const top = results[0];
       const matched = top && top.similarity >= 0.7 ? top : null;
 
@@ -145,9 +160,39 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
             );
           })}
 
+          {/* เลือกตำแหน่งที่เจอ */}
+          <View style={styles.locChooser}>
+            <Text style={styles.locTitle}>📍 ตำแหน่งที่เจอแมว</Text>
+            <View style={styles.locRow}>
+              <TouchableOpacity
+                style={[styles.locOpt, locMode === 'current' && styles.locOptActive]}
+                onPress={() => { setLocMode('current'); setPicked(null); }}
+              >
+                <Ionicons name="navigate" size={16} color={locMode === 'current' ? '#fff' : colors.primary} />
+                <Text style={[styles.locOptText, locMode === 'current' && styles.locOptTextActive]}>ตำแหน่งปัจจุบัน</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.locOpt, locMode === 'manual' && styles.locOptActive]}
+                onPress={() => { setLocMode('manual'); setShowPicker(true); }}
+              >
+                <Ionicons name="map" size={16} color={locMode === 'manual' ? '#fff' : colors.primary} />
+                <Text style={[styles.locOptText, locMode === 'manual' && styles.locOptTextActive]}>ปักจุดเอง</Text>
+              </TouchableOpacity>
+            </View>
+            {locMode === 'manual' && (
+              <TouchableOpacity onPress={() => setShowPicker(true)}>
+                <Text style={styles.locPicked}>
+                  {picked
+                    ? `📌 ปักไว้ที่ ${picked.lat.toFixed(4)}, ${picked.lng.toFixed(4)} (แตะเพื่อแก้)`
+                    : 'แตะเพื่อเลือกจุดบนแผนที่'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* เลือกประเภท + ปักหมุด */}
           <View style={styles.pinBox}>
-            <Text style={styles.pinTitle}>📍 ปักหมุดแมวตัวนี้บนแผนที่</Text>
+            <Text style={styles.pinTitle}>ปักหมุดแมวตัวนี้บนแผนที่</Text>
             <Text style={styles.pinHint}>เลือกว่าคุณมั่นใจแค่ไหน</Text>
 
             <TouchableOpacity style={[styles.pinBtn, styles.pinSure]} onPress={() => pin('lost')} disabled={pinning}>
@@ -196,6 +241,15 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
           <TouchableOpacity style={styles.doneBtn} onPress={onBack}><Text style={styles.doneText}>เสร็จสิ้น</Text></TouchableOpacity>
         </View>
       )}
+
+      {/* ตัวเลือกตำแหน่งบนแผนที่ */}
+      <MapPicker
+        visible={showPicker}
+        title="ปักจุดที่เจอแมว"
+        initialCoords={picked}
+        onCancel={() => { setShowPicker(false); if (!picked) setLocMode('current'); }}
+        onConfirm={(c) => { setPicked(c); setShowPicker(false); }}
+      />
     </ScrollView>
   );
 }
@@ -238,6 +292,16 @@ const styles = StyleSheet.create({
   matchMeta: { fontSize: 13, color: colors.sub, marginTop: 5 },
   callMatch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, height: 38, borderRadius: radius.md, marginTop: 10 },
   callMatchText: { color: '#fff', fontWeight: '700', fontSize: 12.5 },
+
+  // location chooser
+  locChooser: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 18, marginTop: 16, ...shadow },
+  locTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 12 },
+  locRow: { flexDirection: 'row', gap: 10 },
+  locOpt: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 46, borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1.5, borderColor: colors.border },
+  locOptActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  locOptText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  locOptTextActive: { color: '#fff' },
+  locPicked: { fontSize: 13, color: colors.sub, marginTop: 12, fontWeight: '600' },
 
   pinBox: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 18, marginTop: 16, ...shadow },
   pinTitle: { fontSize: 16, fontWeight: '800', color: colors.text },

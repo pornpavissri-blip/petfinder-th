@@ -30,7 +30,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       {loading ? (
         <View style={styles.splash}>
           <Text style={styles.logo}>🐱</Text>

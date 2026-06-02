@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
-import { seedDemoCats, clearDemoCats } from '../services/demoSeed';
+import { seedDemoCats, seedCountryCats, clearDemoCats } from '../services/demoSeed';
 import { colors, radius, shadow, shadowSoft } from '../theme';
 
 export default function ProfileScreen({ onLogout }) {
@@ -35,6 +35,25 @@ export default function ProfileScreen({ onLogout }) {
       );
     } catch (e) {
       console.log('Seed error:', e);
+      Alert.alert('ผิดพลาด', 'ลองใหม่อีกครั้ง (ต้องต่อเน็ต)');
+    }
+    setSeeding(false);
+  };
+
+  const runCountrySeed = async () => {
+    setSeeding(true);
+    try {
+      const r = await seedCountryCats(phone);
+      const total = (r?.cats || 0) + (r?.found || 0);
+      await load();
+      Alert.alert(
+        total > 0 ? 'สร้างแมวทั้งประเทศแล้ว 🇹🇭' : 'ไม่สำเร็จ',
+        total > 0
+          ? `• แมวหาย ${r.cats} ตัว (หมุดแดง)\n• คนเจอแมว/อาจเป็นจร ${r.found} จุด (หมุดเหลือง)\nกระจายทั่วประเทศ ลองเปิดหน้าแผนที่ดู — อาจโหลดสักครู่`
+          : 'โหลดรูปแมวไม่ได้ ลองเช็กเน็ตแล้วลองใหม่'
+      );
+    } catch (e) {
+      console.log('Country seed error:', e);
       Alert.alert('ผิดพลาด', 'ลองใหม่อีกครั้ง (ต้องต่อเน็ต)');
     }
     setSeeding(false);
@@ -188,6 +207,14 @@ export default function ProfileScreen({ onLogout }) {
               </>
             )}
           </TouchableOpacity>
+          <TouchableOpacity style={styles.countryBtn} onPress={runCountrySeed} disabled={seeding} activeOpacity={0.85}>
+            {seeding ? <ActivityIndicator color="#fff" /> : (
+              <>
+                <Ionicons name="globe" size={18} color="#fff" />
+                <Text style={styles.seedText}>🇹🇭 เจนแมวทั้งประเทศ (จังหวัดละ 2-3)</Text>
+              </>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity style={styles.clearBtn} onPress={runClear} disabled={seeding}>
             <Ionicons name="trash-outline" size={16} color={colors.sub} />
             <Text style={styles.clearText}>ล้างข้อมูลจำลอง</Text>
@@ -239,6 +266,7 @@ const styles = StyleSheet.create({
 
   demoHint: { fontSize: 12.5, color: colors.sub, marginTop: -6, marginBottom: 12, lineHeight: 18 },
   seedBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, height: 50, borderRadius: radius.md },
+  countryBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.secondary, height: 50, borderRadius: radius.md, marginTop: 10 },
   seedText: { color: '#fff', fontWeight: '800', fontSize: 15 },
   clearBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 42, marginTop: 8 },
   clearText: { color: colors.sub, fontWeight: '600', fontSize: 13.5 },

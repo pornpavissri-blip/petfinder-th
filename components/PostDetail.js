@@ -1,9 +1,12 @@
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadow, daysAgo } from '../theme';
 import { formatDistance } from '../services/location';
 
 export default function PostDetail({ cat, distanceKm, onBack }) {
+  const insets = useSafeAreaInsets();
+
   const callOwner = () => {
     Alert.alert('ติดต่อเจ้าของ', `โทรหา ${cat.ownerPhone} ?`, [
       { text: 'ยกเลิก', style: 'cancel' },
@@ -17,7 +20,7 @@ export default function PostDetail({ cat, distanceKm, onBack }) {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.imgWrap}>
         <Image source={{ uri: `data:image/jpeg;base64,${cat.imageBase64}` }} style={styles.img} />
-        <TouchableOpacity style={styles.back} onPress={onBack}>
+        <TouchableOpacity style={[styles.back, { top: insets.top + 6 }]} onPress={onBack}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.lostBadge}>
@@ -37,7 +40,7 @@ export default function PostDetail({ cat, distanceKm, onBack }) {
           )}
         </View>
         <Text style={styles.meta}>
-          สี{cat.color}{cat.breed ? ` • ${cat.breed}` : ''}{cat.age ? ` • ${cat.age}` : ''}
+          สี{cat.color}{cat.breed ? ` • ${cat.breed}` : ''}{cat.age ? ` • ${cat.age}` : ''}{cat.sex === 'ผู้' ? ' • ♂ ผู้' : cat.sex === 'เมีย' ? ' • ♀ เมีย' : ''}
         </Text>
 
         {cat.reward > 0 && (
@@ -78,7 +81,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   imgWrap: { position: 'relative' },
   img: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
-  back: { position: 'absolute', top: 16, left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  back: { position: 'absolute', left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   lostBadge: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.lost, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full },
   lostBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 

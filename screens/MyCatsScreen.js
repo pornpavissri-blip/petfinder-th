@@ -57,8 +57,7 @@ export default function MyCatsScreen() {
   if (showForm) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="เพิ่มน้องแมว" subtitle="ลงทะเบียนเพื่อให้ตามหาได้ง่าย" emoji="🐾"
-          right={<TouchableOpacity onPress={() => setShowForm(false)} style={styles.closeBtn}><Ionicons name="close" size={24} color="#fff" /></TouchableOpacity>} />
+        <GradientHeader title="เพิ่มน้องแมว" subtitle="ลงทะเบียนเพื่อให้ตามหาได้ง่าย" emoji="🐾" onClose={() => setShowForm(false)} />
         <AddCatForm onAdded={() => { setShowForm(false); fetchCats(); }} />
       </View>
     );
@@ -68,8 +67,7 @@ export default function MyCatsScreen() {
   if (reportLostCat) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="แจ้งแมวหาย" subtitle="ลงประกาศตามหาน้อง" emoji="🔴"
-          right={<TouchableOpacity onPress={() => setReportLostCat(null)} style={styles.closeBtn}><Ionicons name="close" size={24} color="#fff" /></TouchableOpacity>} />
+        <GradientHeader title="แจ้งแมวหาย" subtitle="ลงประกาศตามหาน้อง" emoji="🔴" onClose={() => setReportLostCat(null)} />
         <ReportLostForm cat={reportLostCat} onDone={() => { setReportLostCat(null); fetchCats(); }} />
       </View>
     );
@@ -91,7 +89,7 @@ export default function MyCatsScreen() {
               <Text style={[styles.badgeText, { color: s.color }]}>{s.label}</Text>
             </View>
           </View>
-          <Text style={styles.catMeta}>สี{item.color}{item.breed ? ` • ${item.breed}` : ''}{item.age ? ` • ${item.age}` : ''}</Text>
+          <Text style={styles.catMeta}>สี{item.color}{item.breed ? ` • ${item.breed}` : ''}{item.age ? ` • ${item.age}` : ''}{item.sex === 'ผู้' ? ' • ♂ ผู้' : item.sex === 'เมีย' ? ' • ♀ เมีย' : ''}</Text>
           {isLost && item.reward > 0 && (
             <Text style={styles.rewardLine}>💰 รางวัล {Number(item.reward).toLocaleString()} บาท</Text>
           )}

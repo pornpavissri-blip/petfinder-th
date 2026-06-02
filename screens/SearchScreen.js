@@ -14,6 +14,7 @@ import GradientHeader from '../components/GradientHeader';
 import PostDetail from '../components/PostDetail';
 import SightingDetail from '../components/SightingDetail';
 import FoundCatFlow from '../components/FoundCatFlow';
+import CatCamera from '../components/CatCamera';
 import { colors, radius, shadow, daysAgo } from '../theme';
 
 const byDistance = (a, b) => {
@@ -34,6 +35,7 @@ export default function SearchScreen() {
   const [selSight, setSelSight] = useState(null);
   const [foundImageUri, setFoundImageUri] = useState(null);
   const [finderPhone, setFinderPhone] = useState('');
+  const [showCamera, setShowCamera] = useState(false);
 
   const loadFeed = useCallback(async () => {
     try {
@@ -67,14 +69,18 @@ export default function SearchScreen() {
 
   useFocusEffect(useCallback(() => { if (mode === 'feed') loadFeed(); }, [loadFeed, mode]));
 
-  const startFound = async (fromCamera) => {
-    const perm = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึง'); return; }
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.7 })
-      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+  // กล้องในแอป (กรอบเล็งหน้าแมว)
+  const onCameraCapture = (uri) => {
+    setShowCamera(false);
+    setFoundImageUri(uri);
+    setMode('found');
+  };
+
+  // เลือกรูปจากคลังภาพ
+  const pickFromGallery = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตการเข้าถึงคลังรูปภาพ'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.7 });
     if (!result.canceled) { setFoundImageUri(result.assets[0].uri); setMode('found'); }
   };
 
@@ -92,8 +98,7 @@ export default function SearchScreen() {
   if (mode === 'found' && foundImageUri) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="ตามหาเจ้าของ" subtitle="เทียบกับโพสต์แมวหาย" emoji="🔍"
-          right={<TouchableOpacity onPress={back} style={styles.closeBtn}><Ionicons name="close" size={24} color="#fff" /></TouchableOpacity>} />
+        <GradientHeader title="ตามหาเจ้าของ" subtitle="เทียบกับโพสต์แมวหาย" emoji="🔍" onClose={back} />
         <FoundCatFlow foundImageUri={foundImageUri} lostCats={lostPosts} finderPhone={finderPhone} onBack={back} onPinnedDone={() => {}} />
       </View>
     );
@@ -163,13 +168,13 @@ export default function SearchScreen() {
           ListHeaderComponent={
             <View>
               {/* camera CTA */}
-              <TouchableOpacity style={styles.cta} activeOpacity={0.9} onPress={() => startFound(true)}>
+              <TouchableOpacity style={styles.cta} activeOpacity={0.9} onPress={() => setShowCamera(true)}>
                 <View style={styles.ctaIcon}><Ionicons name="camera" size={24} color="#fff" /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.ctaTitle}>เจอแมวจร? ถ่ายรูปเลย</Text>
                   <Text style={styles.ctaText}>ระบบช่วยเทียบหาเจ้าของ + ปักหมุดบนแผนที่</Text>
                 </View>
-                <TouchableOpacity style={styles.ctaGallery} onPress={() => startFound(false)}>
+                <TouchableOpacity style={styles.ctaGallery} onPress={pickFromGallery}>
                   <Ionicons name="images" size={20} color={colors.primary} />
                 </TouchableOpacity>
               </TouchableOpacity>
@@ -194,6 +199,9 @@ export default function SearchScreen() {
           }
         />
       )}
+
+      {/* กล้องในแอป + กรอบเล็งหน้าแมว */}
+      <CatCamera visible={showCamera} onClose={() => setShowCamera(false)} onCapture={onCameraCapture} />
     </View>
   );
 }

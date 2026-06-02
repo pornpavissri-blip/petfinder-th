@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getCurrentCoords } from '../services/location';
+import MapPicker from './MapPicker';
 import { colors, radius, shadow } from '../theme';
 
 export default function ReportLostForm({ cat, onDone }) {
@@ -14,10 +15,23 @@ export default function ReportLostForm({ cat, onDone }) {
   const [lostNote, setLostNote] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // ---- จุดที่น้องหาย ----
+  const [locMode, setLocMode] = useState('current'); // current | manual
+  const [picked, setPicked] = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
+
   const handleSubmit = async () => {
+    if (locMode === 'manual' && !picked) {
+      Alert.alert('ยังไม่ได้เลือกตำแหน่ง', 'แตะ "ปักจุดเอง" แล้วเลือกจุดบนแผนที่ก่อน');
+      return;
+    }
     setSaving(true);
     try {
-      const coords = await getCurrentCoords();
+      // ใช้ตำแหน่งตามที่เลือก
+      let coords;
+      if (locMode === 'manual' && picked) coords = picked;
+      else coords = await getCurrentCoords();
+
       const data = {
         status: 'lost',
         lostAt: serverTimestamp(),
@@ -51,9 +65,34 @@ export default function ReportLostForm({ cat, onDone }) {
           </View>
         </View>
 
-        <View style={styles.locBox}>
-          <Ionicons name="location" size={20} color={colors.lost} />
-          <Text style={styles.locText}>ระบบจะบันทึก "ตำแหน่งที่คุณอยู่ตอนนี้" เป็นจุดที่น้องหาย</Text>
+        {/* เลือกจุดที่น้องหาย */}
+        <View style={styles.locChooser}>
+          <Text style={styles.locTitle}>📍 จุดที่น้องหาย</Text>
+          <View style={styles.locRow}>
+            <TouchableOpacity
+              style={[styles.locOpt, locMode === 'current' && styles.locOptActive]}
+              onPress={() => { setLocMode('current'); setPicked(null); }}
+            >
+              <Ionicons name="navigate" size={16} color={locMode === 'current' ? '#fff' : colors.primary} />
+              <Text style={[styles.locOptText, locMode === 'current' && styles.locOptTextActive]}>ตำแหน่งปัจจุบัน</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.locOpt, locMode === 'manual' && styles.locOptActive]}
+              onPress={() => { setLocMode('manual'); setShowPicker(true); }}
+            >
+              <Ionicons name="map" size={16} color={locMode === 'manual' ? '#fff' : colors.primary} />
+              <Text style={[styles.locOptText, locMode === 'manual' && styles.locOptTextActive]}>ปักจุดเอง</Text>
+            </TouchableOpacity>
+          </View>
+          {locMode === 'manual' && (
+            <TouchableOpacity onPress={() => setShowPicker(true)}>
+              <Text style={styles.locPicked}>
+                {picked
+                  ? `📌 ปักไว้ที่ ${picked.lat.toFixed(4)}, ${picked.lng.toFixed(4)} (แตะเพื่อแก้)`
+                  : 'แตะเพื่อเลือกจุดบนแผนที่'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.label}>💰 เงินรางวัล (ถ้ามี)</Text>
@@ -89,6 +128,15 @@ export default function ReportLostForm({ cat, onDone }) {
           )}
         </TouchableOpacity>
         <View style={{ height: 40 }} />
+
+        {/* ตัวเลือกตำแหน่งบนแผนที่ */}
+        <MapPicker
+          visible={showPicker}
+          title="ปักจุดที่น้องหาย"
+          initialCoords={picked}
+          onCancel={() => { setShowPicker(false); if (!picked) setLocMode('current'); }}
+          onConfirm={(c) => { setPicked(c); setShowPicker(false); }}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -101,8 +149,15 @@ const styles = StyleSheet.create({
   catName: { fontSize: 19, fontWeight: '800', color: colors.text },
   catMeta: { fontSize: 13, color: colors.sub, marginTop: 3 },
 
-  locBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.lostSoft, borderRadius: radius.md, padding: 14, marginTop: 16 },
-  locText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 19 },
+  // location chooser
+  locChooser: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 18, marginTop: 16, ...shadow },
+  locTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 12 },
+  locRow: { flexDirection: 'row', gap: 10 },
+  locOpt: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 46, borderRadius: radius.md, backgroundColor: colors.bg, borderWidth: 1.5, borderColor: colors.border },
+  locOptActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  locOptText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  locOptTextActive: { color: '#fff' },
+  locPicked: { fontSize: 13, color: colors.sub, marginTop: 12, fontWeight: '600' },
 
   label: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 22, marginBottom: 8 },
   rewardWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.rewardSoft, borderRadius: radius.md, paddingHorizontal: 16, height: 56, borderWidth: 1.5, borderColor: '#F3D9A0' },

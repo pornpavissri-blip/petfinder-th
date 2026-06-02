@@ -3,7 +3,8 @@ import { StyleSheet, Text, View, Image, TouchableOpacity, ActivityIndicator, Mod
 import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
 import { colors, radius, shadow } from '../theme';
@@ -18,15 +19,19 @@ export default function MapScreen() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [myPhone, setMyPhone] = useState('');
 
   const fetchData = useCallback(async () => {
     try {
+      const phone = await AsyncStorage.getItem('userPhone');
+      setMyPhone(phone || '');
+
       const list = [];
       const lostSnap = await getDocs(query(collection(db, 'cats'), where('status', '==', 'lost')));
       lostSnap.docs.forEach((d) => {
         const c = d.data();
         if (typeof c.lostLat === 'number') {
-          list.push({ key: `lost-${d.id}`, lat: c.lostLat, lng: c.lostLng, color: colors.lost, image: c.imageBase64, kind: 'lost', title: c.name, sub: `แมวหาย • สี${c.color}`, reward: c.reward, note: c.lostNote || c.notes, phone: c.ownerPhone, role: 'เจ้าของ' });
+          list.push({ key: `lost-${d.id}`, docId: d.id, lat: c.lostLat, lng: c.lostLng, color: colors.lost, image: c.imageBase64, kind: 'lost', title: c.name, sub: `แมวหาย • สี${c.color}${c.sex === 'ผู้' ? ' • ♂' : c.sex === 'เมีย' ? ' • ♀' : ''}`, reward: c.reward, note: c.lostNote || c.notes, phone: c.ownerPhone, role: 'เจ้าของ' });
         }
       });
       const sightSnap = await getDocs(collection(db, 'sightings'));
@@ -34,7 +39,7 @@ export default function MapScreen() {
         const s = d.data();
         if (typeof s.foundLat === 'number') {
           const sure = s.confidence === 'lost';
-          list.push({ key: `sight-${d.id}`, lat: s.foundLat, lng: s.foundLng, color: sure ? colors.lost : colors.warn, image: s.imageBase64, kind: 'sight', title: 'มีคนเจอแมว', sub: `สี${s.color} • ${sure ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'}`, matchedCatName: s.matchedCatName, phone: s.finderPhone, role: 'คนที่เจอ' });
+          list.push({ key: `sight-${d.id}`, docId: d.id, lat: s.foundLat, lng: s.foundLng, color: sure ? colors.lost : colors.warn, image: s.imageBase64, kind: 'sight', title: 'มีคนเจอแมว', sub: `สี${s.color} • ${sure ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'}`, matchedCatName: s.matchedCatName, phone: s.finderPhone, role: 'คนที่เจอ' });
         }
       });
       setItems(list);
@@ -49,6 +54,26 @@ export default function MapScreen() {
     Alert.alert('โทรออก', `โทรหา ${phone} ?`, [
       { text: 'ยกเลิก', style: 'cancel' },
       { text: 'โทร', onPress: () => Linking.openURL(`tel:${phone}`) },
+    ]);
+  };
+
+  // ลบหมุดที่ผู้ใช้ปักเอง (เฉพาะหมุด "คนเจอแมว" ของตัวเอง)
+  const deleteSighting = (item) => {
+    Alert.alert('ลบหมุดนี้?', 'หมุดแมวที่คุณปักไว้จะถูกลบออกจากแผนที่ถาวร', [
+      { text: 'ยกเลิก', style: 'cancel' },
+      {
+        text: 'ลบ', style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'sightings', item.docId));
+            setSelected(null);
+            fetchData();
+          } catch (e) {
+            console.log('Delete sighting error:', e);
+            Alert.alert('ผิดพลาด', 'ลบไม่สำเร็จ ลองใหม่อีกครั้ง');
+          }
+        },
+      },
     ]);
   };
 
@@ -114,6 +139,14 @@ export default function MapScreen() {
                     <Ionicons name="call" size={18} color="#fff" />
                     <Text style={styles.modalCallText}>โทรหา{selected.role} {selected.phone}</Text>
                   </TouchableOpacity>
+
+                  {/* ลบได้เฉพาะหมุดคนเจอที่เราปักเอง */}
+                  {selected.kind === 'sight' && selected.phone === myPhone && (
+                    <TouchableOpacity style={styles.modalDelete} onPress={() => deleteSighting(selected)}>
+                      <Ionicons name="trash-outline" size={17} color={colors.lost} />
+                      <Text style={styles.modalDeleteText}>ลบหมุดนี้</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </>
             )}
@@ -149,6 +182,8 @@ const styles = StyleSheet.create({
   modalNote: { fontSize: 14, color: colors.sub, marginTop: 10, lineHeight: 21 },
   modalCall: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, height: 52, borderRadius: radius.md, marginTop: 18 },
   modalCallText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  modalDelete: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, height: 46, borderRadius: radius.md, marginTop: 10, backgroundColor: colors.lostSoft },
+  modalDeleteText: { color: colors.lost, fontWeight: '800', fontSize: 14.5 },
 
   emptyOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(246,247,251,0.6)' },
   emptyCard: { backgroundColor: '#fff', borderRadius: radius.lg, padding: 28, alignItems: 'center', marginHorizontal: 40, ...shadow },
