@@ -189,4 +189,4 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: '#fff', borderRadius: radius.lg, padding: 28, alignItems: 'center', marginHorizontal: 40, ...shadow },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: colors.text, marginTop: 10 },
   emptyText: { fontSize: 13.5, color: colors.sub, marginTop: 6, textAlign: 'center', lineHeight: 20 },
-});
+}); 

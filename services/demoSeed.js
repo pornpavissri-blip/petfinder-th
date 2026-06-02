@@ -290,4 +290,4 @@ export async function clearDemoCats() {
   const sightSnap = await getDocs(query(collection(db, 'sightings'), where('demo', '==', true)));
   for (const d of sightSnap.docs) { await deleteDoc(doc(db, 'sightings', d.id)); n++; }
   return n;
-}
+} 
