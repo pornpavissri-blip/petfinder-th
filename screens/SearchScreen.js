@@ -17,9 +17,6 @@ import FoundCatFlow from '../components/FoundCatFlow';
 import CatCamera from '../components/CatCamera';
 import { colors, radius, shadow, daysAgo } from '../theme';
 
-// 📦 ดึงไฟล์ภาพ Logo จากโฟลเดอร์ assets มาเตรียมใช้งาน
-const catLogoAsset = require('../assets/Logo.png');
-
 // 🛠️ ฟังก์ชันช่วยแปลง Firestore Timestamp หรือ Date ให้เป็นวันที่อ่านง่าย (เช่น "02 มิ.ย. 2026")
 const formatUploadDate = (timestamp) => {
   if (!timestamp) return '';
@@ -36,7 +33,7 @@ const formatUploadDate = (timestamp) => {
 };
 
 export default function SearchScreen({ navigation }) {
-  const [tab, setTab] = useState('found'); // found (คนเจอแมว) | lost (แมวหาย)
+  const [tab, setTab] = useState('lost'); // found (คนเจอแมว) | lost (แมวหาย)
   const [mode, setMode] = useState('feed'); // feed | lostDetail | sightDetail | found
   const [lostPosts, setLostPosts] = useState([]);
   const [sightings, setSightings] = useState([]);
@@ -150,14 +147,7 @@ export default function SearchScreen({ navigation }) {
   if (mode === 'found' && foundImageUri) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <View style={styles.screenHeaderOuterBox}>
-          <View style={styles.screenHeaderInnerFlex}>
-            <Image source={catLogoAsset} style={styles.screenHeaderLogoLeft} resizeMode="contain" />
-            <View style={styles.gradientHeaderWrapperBox}>
-              <GradientHeader title="ตามหาเจ้าของ" subtitle="เทียบกับโพสต์แมวหาย" onClose={back} />
-            </View>
-          </View>
-        </View>
+        <GradientHeader title="ตามหาเจ้าของ" subtitle="เทียบกับโพสต์แมวหาย" emoji="🔍" onClose={back} />
         <FoundCatFlow foundImageUri={foundImageUri} lostCats={lostPosts} finderPhone={finderPhone} onBack={back} onPinnedDone={() => { }} />
       </View>
     );
@@ -179,7 +169,7 @@ export default function SearchScreen({ navigation }) {
           </View>
           <View style={[styles.confBadge, { backgroundColor: isLost ? colors.lostSoft : colors.rewardSoft }]}>
             <Text style={[styles.confText, { color: isLost ? colors.lost : '#B8780A' }]}>
-              {isLost ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'}
+              {isLost ? '🔴 มั่นใจว่าแมวหาย' : '🟡 อาจเป็นจร/หาย'}
             </Text>
           </View>
 
@@ -231,19 +221,8 @@ export default function SearchScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      
-      {/* 🛠️ ครอบพื้นที่ GradientHeader และ วาง Logo.png แทรกไว้ฝั่งซ้ายแบบไม่ทับซ้อนข้อความ */}
-      <View style={styles.screenHeaderOuterBox}>
-        <View style={styles.screenHeaderInnerFlex}>
-          <Image source={catLogoAsset} style={styles.screenHeaderLogoLeft} resizeMode="contain" />
-          <View style={styles.gradientHeaderWrapperBox}>
-            <GradientHeader 
-              title="ตามหาน้องแมว" 
-              subtitle={tab === 'found' ? `แมวที่คนเจอ ${sightings.length} ตัว` : `แมวหาย ${lostPosts.length} ตัว`} 
-            />
-          </View>
-        </View>
-      </View>
+      <GradientHeader title="ตามหาน้องแมว" emoji="🐾"
+        subtitle={tab === 'found' ? `แมวที่คนเจอ ${sightings.length} ตัว` : `แมวหาย ${lostPosts.length} ตัว`} />
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
@@ -271,11 +250,11 @@ export default function SearchScreen({ navigation }) {
 
               {/* tab switcher */}
               <View style={styles.tabs}>
-                <TouchableOpacity style={[styles.tabBtn, tab === 'found' && styles.tabActive]} onPress={() => setTab('found')}>
-                  <Text style={[styles.tabText, tab === 'found' && styles.tabTextActive]}>เจอแมว</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={[styles.tabBtn, tab === 'lost' && styles.tabActive]} onPress={() => setTab('lost')}>
-                  <Text style={[styles.tabText, tab === 'lost' && styles.tabTextActive]}>แมวหาย</Text>
+                  <Text style={[styles.tabText, tab === 'lost' && styles.tabTextActive]}>🔴 แมวหาย</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tabBtn, tab === 'found' && styles.tabActive]} onPress={() => setTab('found')}>
+                  <Text style={[styles.tabText, tab === 'found' && styles.tabTextActive]}>🔵 เจอแมว</Text>
                 </TouchableOpacity>
               </View>
 
@@ -439,30 +418,4 @@ const styles = StyleSheet.create({
   sortChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   sortChipText: { fontSize: 12, fontWeight: '600', color: colors.sub },
   sortChipTextActive: { color: '#fff', fontWeight: '700' },
-
-  // 🎨 จัดโครงสร้างตำแหน่งโลโก้ฝั่งซ้ายแบบไม่เบียดข้อความหัวเรื่อง
-  screenHeaderOuterBox: {
-    width: '100%',
-    backgroundColor: 'transparent',
-  },
-  screenHeaderInnerFlex: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-    width: '100%',
-  },
-  screenHeaderLogoLeft: {
-     width: 100,                  // แก้ไข: ใช้ตัวเลขล้วน ห้ามใส่ "px"
-    height: 100,                 // แก้ไข: พิมพ์คำว่า height ให้ถูกต้อง และใช้ตัวเลขล้วน
-    position: 'absolute',
-    left: -5,                   // ระยะห่างจากขอบซ้ายจอ
-    bottom: -15,                 // ปรับให้อยู่กึ่งกลางระนาบเดียวกับ Title/Subtitle พอดีอย่างสมมาตร
-    borderRadius: 25,           // แก้ไข: ปรับเป็น 25 (ครึ่งหนึ่งของ 50) เพื่อให้เป็นวงกลมที่สมบูรณ์
-    zIndex: 99,                 // ป้องกันไม่ให้โดนพื้นหลังของคอมโพเนนต์อื่น ๆ วาดทับ
-    ...shadow, 
-  },
-  gradientHeaderWrapperBox: {
-    flex: 1,
-    paddingLeft: 62, // ดันพื้นที่ให้ปลอดภัยห่างจากขนาดภาพโลโก้ทางฝั่งซ้ายอย่างสวยงาม
-  },
 });
