@@ -13,11 +13,7 @@ import CatCamera from './CatCamera';
 import DOBPicker from './DOBPicker';
 import { colors, radius, shadow, ageText, formatBirthDate } from '../theme';
 
-export const CAT_COLORS = [
-  'ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ครีม', 'ทอง',
-  'ลายเสือ', 'ลายสลิด', 'สามสี', 'กระดองเต่า',
-  'ขาวดำ', 'ขาวส้ม', 'เทาขาว', 'บลู (เทาน้ำเงิน)',
-];
+export const CAT_COLORS = ['ส้ม', 'ขาว', 'ดำ', 'เทา', 'สามสี', 'ลายเสือ', 'ขาวดำ'];
 export const SEX_OPTIONS = ['ผู้', 'เมีย', 'ไม่ทราบ'];
 export const CAT_BREEDS = [
   'ไทย/พันทาง', 'วิเชียรมาศ', 'โคราช (สีสวาด)', 'ขาวมณี', 'ศุภลักษณ์',

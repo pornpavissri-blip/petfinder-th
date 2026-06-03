@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet, Text, View, Image, TouchableOpacity, ActivityIndicator,
-  Modal, Linking, Alert, Platform, TextInput, FlatList
+  Modal, Linking, Alert, Platform, TextInput, FlatList, ScrollView
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import MapView, { Marker } from 'react-native-maps';
@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
+import { getOrCreateChat } from '../services/chatService';
 import { colors, radius, shadow } from '../theme';
 
 const PROVINCES = [
@@ -111,11 +112,14 @@ const FILTER_OPTIONS = [
   { id: 'sight', label: 'แจ้งพบเบาะแส',     icon: 'camera-outline',       color: colors.warn },
 ];
 
-export default function MapScreen() {
+export default function MapScreen({ navigation }) {
   const [items, setItems]                         = useState([]);
   const [loading, setLoading]                     = useState(true);
   const [selected, setSelected]                   = useState(null);
   const [myPhone, setMyPhone]                     = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [imgW, setImgW] = useState(0);
+  const [imgIndex, setImgIndex] = useState(0);
   const [activeFilter, setActiveFilter]           = useState('all');
   const [searchQuery, setSearchQuery]             = useState('');
   const [selectedProvince, setSelectedProvince]   = useState(PROVINCES[0]);
@@ -154,6 +158,7 @@ export default function MapScreen() {
           list.push({
             key: `sight-${d.id}`, docId: d.id, lat: s.foundLat, lng: s.foundLng,
             color: sure ? colors.lost : colors.warn, image: s.imageBase64,
+            images: s.images || null, catColor: s.color,
             kind: 'sight', title: 'มีคนเจอแมว',
             sub: `สี${s.color} • ${sure ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'}`,
             breed: '', matchedCatName: s.matchedCatName,
@@ -235,6 +240,31 @@ export default function MapScreen() {
     ]);
   };
 
+  const openChat = async (item) => {
+    setChatLoading(true);
+    try {
+      const my = myPhone || (await AsyncStorage.getItem('userPhone'));
+      if (!my) { Alert.alert('ข้อผิดพลาด', 'ไม่พบข้อมูลผู้ใช้'); return; }
+      if (my === item.phone) { Alert.alert('นี่คือโพสต์ของคุณเอง'); return; }
+      const catName = item.kind === 'sight'
+        ? (item.matchedCatName || `แมวสี${item.catColor || ''}`)
+        : item.title;
+      const chatId = await getOrCreateChat(my, item.phone, {
+        catName,
+        myLabel: `ฉัน (${my})`,
+        otherLabel: `${item.role} (${item.phone})`,
+      });
+      setSelected(null);
+      navigation?.navigate('Chat', {
+        screen: 'ChatRoom',
+        params: { chatId, otherPhone: item.phone, otherLabel: item.role, myPhone: my, catName },
+      });
+    } catch (e) {
+      Alert.alert('เปิดแชทไม่สำเร็จ', e.message || 'กรุณาลองใหม่');
+    }
+    setChatLoading(false);
+  };
+
   // ── Render ─────────────────────────────────────────────────────────
   return (
     <View style={styles.root}>
@@ -313,7 +343,7 @@ export default function MapScreen() {
                 <Marker
                   key={m.key}
                   coordinate={{ latitude: m.lat, longitude: m.lng }}
-                  onPress={() => setSelected(m)}
+                  onPress={() => { setSelected(m); setImgIndex(0); }}
                 >
                   <View style={[styles.marker, { borderColor: m.kind === 'lost' ? colors.lost : colors.warn }]}>
                     {m.image
@@ -416,12 +446,42 @@ export default function MapScreen() {
             {selected && (
               <>
                 {/* Image */}
-                <View style={styles.detailImgWrap}>
-                  <Image
-                    source={{ uri: `data:image/jpeg;base64,${selected.image}` }}
-                    style={styles.detailImg}
-                    resizeMode="cover"
-                  />
+                <View style={styles.detailImgWrap} onLayout={(e) => setImgW(e.nativeEvent.layout.width)}>
+                  {(() => {
+                    const imgs = selected.images?.length ? selected.images : [selected.image];
+                    const w = imgW || 340;
+                    return (
+                      <>
+                        <ScrollView
+                          horizontal
+                          pagingEnabled
+                          showsHorizontalScrollIndicator={false}
+                          onMomentumScrollEnd={(e) => setImgIndex(Math.round(e.nativeEvent.contentOffset.x / w))}
+                        >
+                          {imgs.map((b64, i) => (
+                            <Image
+                              key={i}
+                              source={{ uri: `data:image/jpeg;base64,${b64}` }}
+                              style={{ width: w, height: 220, backgroundColor: '#eee' }}
+                              resizeMode="cover"
+                            />
+                          ))}
+                        </ScrollView>
+                        {imgs.length > 1 && (
+                          <>
+                            <View style={styles.detailCounter}>
+                              <Text style={styles.detailCounterText}>{Math.min(imgIndex + 1, imgs.length)}/{imgs.length}</Text>
+                            </View>
+                            <View style={styles.detailDots}>
+                              {imgs.map((_, i) => (
+                                <View key={i} style={[styles.detailDot, i === imgIndex && styles.detailDotActive]} />
+                              ))}
+                            </View>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                   <TouchableOpacity style={styles.detailClose} onPress={() => setSelected(null)}>
                     <Ionicons name="close" size={20} color="#fff" />
                   </TouchableOpacity>
@@ -477,6 +537,15 @@ export default function MapScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {selected.phone && selected.phone !== myPhone && (
+                    <TouchableOpacity style={styles.btnChat} onPress={() => openChat(selected)} disabled={chatLoading} activeOpacity={0.85}>
+                      {chatLoading
+                        ? <ActivityIndicator size="small" color={colors.primary} />
+                        : <Ionicons name="chatbubble-ellipses" size={18} color={colors.primary} />}
+                      <Text style={styles.btnChatText}>แชทกับ{selected.role}</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {selected.kind === 'sight' && selected.phone === myPhone && (
                     <TouchableOpacity style={styles.btnDelete} onPress={() => deleteSighting(selected)}>
@@ -682,5 +751,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lostSoft,
   },
   btnDeleteText: { color: colors.lost, fontWeight: '800', fontSize: 14 },
-});
 
+  btnChat: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, height: 48, borderRadius: 14, marginTop: 10,
+    backgroundColor: colors.primarySoft,
+  },
+  btnChatText: { color: colors.primary, fontWeight: '800', fontSize: 14.5 },
+  detailCounter: {
+    position: 'absolute', top: 12, left: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
+  },
+  detailCounterText: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
+  detailDots: { position: 'absolute', bottom: 12, alignSelf: 'center', flexDirection: 'row', gap: 6 },
+  detailDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.55)' },
+  detailDotActive: { backgroundColor: '#fff', width: 20 },
+});

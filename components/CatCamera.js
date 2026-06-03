@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Modal, ActivityIndicator, Alert } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker'; // 👈 นำเข้า ImagePicker เพิ่มเติม
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme';
 
-// กล้องในแอป + กรอบเล็งหน้าแมว (เหมือนสแกนใบหน้า)
+// กล้องในแอป + กรอบเล็งหน้าแมว (เหมือนสแกนใบหน้า) + เลือกรูปจากอัลบั้มได้
 // props: visible, onClose, onCapture(uri)
 export default function CatCamera({ visible, onClose, onCapture }) {
   const insets = useSafeAreaInsets();
@@ -15,6 +16,7 @@ export default function CatCamera({ visible, onClose, onCapture }) {
   const [ready, setReady] = useState(false);
   const [taking, setTaking] = useState(false);
 
+  // 📸 ฟังก์ชันสำหรับกดถ่ายรูป
   const snap = async () => {
     if (!cameraRef.current || !ready || taking) return;
     setTaking(true);
@@ -25,6 +27,30 @@ export default function CatCamera({ visible, onClose, onCapture }) {
       console.log('takePicture error:', e);
     }
     setTaking(false);
+  };
+
+  // 🖼️ ฟังก์ชันสำหรับเลือกรูปภาพจากคลัง (Gallery)
+  const pickFromGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== 'granted') {
+        Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้แอปเข้าถึงคลังรูปภาพในตั้งค่าโทรศัพท์ของคุณ');
+        return;
+      }
+      
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1], // ตัดภาพเป็นสี่เหลี่ยมจัตุรัสตาม Layout หลัก
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        onCapture?.(result.assets[0].uri); // ส่งพาร์ทไฟล์รูปกลับไปทำงานต่อ
+      }
+    } catch (e) {
+      console.log('pickFromGallery error:', e);
+    }
   };
 
   return (
@@ -82,12 +108,24 @@ export default function CatCamera({ visible, onClose, onCapture }) {
               </TouchableOpacity>
             </View>
 
-            {/* ปุ่มชัตเตอร์ */}
-            <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 24 }]}>
-              <TouchableOpacity style={styles.shutter} onPress={snap} disabled={!ready || taking} activeOpacity={0.8}>
-                {taking ? <ActivityIndicator color={colors.primary} /> : <View style={styles.shutterInner} />}
-              </TouchableOpacity>
-              <Text style={styles.shutterHint}>{ready ? 'แตะเพื่อถ่าย' : 'กำลังเปิดกล้อง...'}</Text>
+            {/* แถบล่างควบคุม: ปุ่มคลังภาพ / ปุ่มถ่ายรูปชัตเตอร์ / เว้นพื้นที่สมดุลฝั่งซ้าย */}
+            <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 20 }]}>
+              <Text style={styles.shutterHint}>{ready ? 'แตะเพื่อถ่ายรูป' : 'กำลังเปิดกล้อง...'}</Text>
+              
+              <View style={styles.controlsRow}>
+                {/* ดัมมี่เปล่าๆ ไว้ทางซ้ายเพื่อจัดตำแหน่งให้ปุ่มชัตเตอร์อยู่ตรงกลางเป๊ะพอดี */}
+                <View style={styles.sideButtonDummy} />
+
+                {/* ปุ่มชัตเตอร์ถ่ายรูป */}
+                <TouchableOpacity style={styles.shutter} onPress={snap} disabled={!ready || taking} activeOpacity={0.8}>
+                  {taking ? <ActivityIndicator color={colors.primary} /> : <View style={styles.shutterInner} />}
+                </TouchableOpacity>
+
+                {/* ปุ่มเปิดคลังภาพ (Gallery Button) */}
+                <TouchableOpacity style={[styles.iconBtn, styles.galleryBtn]} onPress={pickFromGallery} activeOpacity={0.7}>
+                  <Ionicons name="images" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
             </View>
           </>
         )}
@@ -128,9 +166,13 @@ const styles = StyleSheet.create({
   scanTag: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.secondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
   scanTagText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 
-  // bottom shutter
-  bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
-  shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
-  shutterInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#fff' },
-  shutterHint: { color: '#fff', fontSize: 13, fontWeight: '700', marginTop: 12 },
+  // bottom controls layout
+  bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', gap: 14 },
+  controlsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingHorizontal: 36 },
+  sideButtonDummy: { width: 44, height: 44 }, // ตัวค้ำบาลานซ์ฝั่งซ้าย
+  galleryBtn: { backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  
+  shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
+  shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
+  shutterHint: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
 });
