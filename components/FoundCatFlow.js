@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   StyleSheet, Text, View, Image, TouchableOpacity, ScrollView,
   ActivityIndicator, Alert, Linking,
@@ -9,6 +10,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { findMatches } from '../services/aiMatch';
+import { getOrCreateChat } from '../services/chatService';
 import { getCurrentCoords } from '../services/location';
 import { CAT_COLORS } from './AddCatForm';
 import MapPicker from './MapPicker';
@@ -16,6 +18,7 @@ import CatCamera from './CatCamera';
 import { colors, radius, shadow } from '../theme';
 
 export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onBack, onPinnedDone }) {
+  const navigation = useNavigation();
   const [step, setStep] = useState('color'); // color | scanning | result | pinned
   const [color, setColor] = useState(null);
   const [results, setResults] = useState([]);
@@ -131,6 +134,24 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
     ]);
   };
 
+  const chatOwner = async (cat) => {
+    try {
+      if (!finderPhone) { Alert.alert('ข้อผิดพลาด', 'ไม่พบเบอร์ของคุณ'); return; }
+      if (finderPhone === cat.ownerPhone) { Alert.alert('นี่คือแมวของคุณเอง'); return; }
+      const chatId = await getOrCreateChat(finderPhone, cat.ownerPhone, {
+        catName: cat.name,
+        myLabel: `คนที่เจอ (${finderPhone})`,
+        otherLabel: `เจ้าของ (${cat.ownerPhone})`,
+      });
+      navigation.navigate('Chat', {
+        screen: 'ChatRoom',
+        params: { chatId, otherPhone: cat.ownerPhone, otherLabel: 'เจ้าของ', myPhone: finderPhone, catName: cat.name },
+      });
+    } catch (e) {
+      Alert.alert('เปิดแชทไม่สำเร็จ', e.message || 'กรุณาลองใหม่');
+    }
+  };
+
   const top = results[0];
   const strong = top && top.similarity >= 0.7;
 
@@ -197,10 +218,16 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
                     </View>
                   </View>
                   <Text style={styles.matchMeta}>สี{cat.color}{cat.breed ? ` • ${cat.breed}` : ''}</Text>
-                  <TouchableOpacity style={styles.callMatch} onPress={() => callPhone(cat.ownerPhone)}>
-                    <Ionicons name="call" size={14} color="#fff" />
-                    <Text style={styles.callMatchText}>โทรหาเจ้าของ {cat.ownerPhone}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.matchBtnRow}>
+                    <TouchableOpacity style={styles.matchChat} onPress={() => chatOwner(cat)}>
+                      <Ionicons name="chatbubble-ellipses" size={14} color={colors.primary} />
+                      <Text style={styles.matchChatText}>แชท</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.callMatch} onPress={() => callPhone(cat.ownerPhone)}>
+                      <Ionicons name="call" size={14} color="#fff" />
+                      <Text style={styles.callMatchText}>โทร {cat.ownerPhone}</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -373,7 +400,10 @@ const styles = StyleSheet.create({
   scoreLow: { backgroundColor: colors.faint },
   scoreText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   matchMeta: { fontSize: 13, color: colors.sub, marginTop: 5 },
-  callMatch: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, height: 38, borderRadius: radius.md, marginTop: 10 },
+  callMatch: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, height: 38, borderRadius: radius.md },
+  matchBtnRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  matchChat: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 16, height: 38, borderRadius: radius.md, backgroundColor: colors.primarySoft },
+  matchChatText: { color: colors.primary, fontWeight: '800', fontSize: 12.5 },
   callMatchText: { color: '#fff', fontWeight: '700', fontSize: 12.5 },
 
   // location chooser
