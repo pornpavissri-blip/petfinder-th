@@ -68,7 +68,12 @@ export default function ChatScreen({ navigation }) {
             <Text style={styles.name} numberOfLines={1}>{otherLabel}</Text>
             <Text style={styles.time}>{timeAgo(item.lastAt)}</Text>
           </View>
-          {item.catName ? <Text style={styles.cat} numberOfLines={1}>🐱 {item.catName}</Text> : null}
+          {item.catName ? (
+            <View style={styles.catRow}>
+              <Ionicons name="paw" size={12.5} color={colors.primary} style={{ marginRight: 4 }} />
+              <Text style={styles.cat} numberOfLines={1}>{item.catName}</Text>
+            </View>
+          ) : null}
           <Text style={[styles.last, unread > 0 && styles.lastUnread]} numberOfLines={1}>
             {item.lastMsg || 'เริ่มแชทได้เลย'}
           </Text>
@@ -82,12 +87,12 @@ export default function ChatScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <GradientHeader title="แชท" emoji="💬" subtitle={chats.length ? `${chats.length} การสนทนา` : 'ข้อความของคุณ'} />
+      <GradientHeader title="แชท" icon="chatbubble-ellipses" subtitle={chats.length ? `${chats.length} การสนทนา` : 'ข้อความของคุณ'} />
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : chats.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>💬</Text>
+          <Ionicons name="chatbubble-ellipses-outline" size={60} color={colors.sub} style={styles.emptyEmoji} />
           <Text style={styles.emptyTitle}>ยังไม่มีการสนทนา</Text>
           <Text style={styles.emptyText}>เมื่อคุณติดต่อผู้ที่เจอแมว หรือมีคนติดต่อมา แชทจะแสดงที่นี่</Text>
         </View>
@@ -112,13 +117,14 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   name: { fontSize: 16, fontWeight: '800', color: colors.text, flex: 1, marginRight: 8 },
   time: { fontSize: 12, color: colors.faint },
-  cat: { fontSize: 12.5, color: colors.primary, fontWeight: '600', marginTop: 2 },
+  catRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  cat: { fontSize: 12.5, color: colors.primary, fontWeight: '600', flex: 1 },
   last: { fontSize: 13.5, color: colors.sub, marginTop: 3 },
   lastUnread: { color: colors.text, fontWeight: '700' },
   badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.lost, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  emptyEmoji: { fontSize: 64, marginBottom: 8 },
+  emptyEmoji: { marginBottom: 8 },
   emptyTitle: { fontSize: 19, fontWeight: '800', color: colors.text },
   emptyText: { fontSize: 14, color: colors.sub, textAlign: 'center', marginTop: 8, lineHeight: 21 },
 });
