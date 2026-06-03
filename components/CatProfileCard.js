@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'; // 1. เพิ่ม useState และ useEffect
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView } from 'react-native';
+import { useState, useEffect, useRef } from 'react'; // 1. เพิ่ม useRef
+import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Alert } from 'react-native'; // เพิ่ม Alert สำหรับแจ้งเตือน
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 2. นำเข้า AsyncStorage เพื่อดึงชื่อผู้ใช้
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import ViewShot from 'react-native-view-shot'; // 2. นำเข้า ViewShot สำหรับแคปเจอร์หน้าจอ
+import * as Sharing from 'expo-sharing'; // 3. นำเข้า expo-sharing สำหรับเปิดหน้าต่างแชร์
 import { colors, radius, shadow, shadowSoft, statusInfo, daysAgo, displayAge, formatBirthDate } from '../theme';
 
 export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, onDelete }) {
@@ -12,13 +14,14 @@ export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, 
   const ageDisplay = displayAge(cat);
   const sexLabel = cat.sex === 'ผู้' ? '♂ ผู้ / Male' : cat.sex === 'เมีย' ? '♀ เมีย / Female' : 'ไม่ระบุเพศ';
 
-  // 3. เพิ่ม State สำหรับเก็บชื่อของ User ปัจจุบัน
   const [currentUserName, setCurrentUserName] = useState('กำลังโหลด...');
+  
+  // 4. สร้างอ้างอิงเพื่อผูกกับ ViewShot Component
+  const viewShotRef = useRef();
 
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        // ดึงชื่อผู้ใช้จาก AsyncStorage (ปรับ Key เช่น 'userName' หรือ 'name' ตามระบบของคุณ)
         const storedName = await AsyncStorage.getItem('userName'); 
         if (storedName) {
           setCurrentUserName(storedName);
@@ -34,88 +37,122 @@ export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, 
     fetchUserData();
   }, []);
 
+  // 5. ฟังก์ชันสั่ง Capture ภาพบัตรและเรียกเมนูแชร์ของระบบเครื่อง
+  const exportCardAsImage = async () => {
+    try {
+      const uri = await viewShotRef.current.capture();
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `แชร์บัตรประจำตัวของ ${cat.name}`,
+          UTI: 'public.png',
+        });
+      } else {
+        Alert.alert('แจ้งเตือน', 'อุปกรณ์ของคุณไม่รองรับการแชร์ไฟล์');
+      }
+    } catch (error) {
+      console.log('Export image error:', error);
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกหรือแชร์รูปภาพได้');
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
-      {/* 💳 บัตรประชาชนแมว (Cat ID Card Component) */}
-      <View style={styles.idCard}>
-        {/* หัวบัตร */}
-        <View style={styles.cardHeader}>
-          <Ionicons name="paw" size={18} color="#fff" />
-          <Text style={styles.cardHeaderTitle}>บัตรประจำตัวประชากรแมว</Text>
-        </View>
-
-        {/* เนื้อหาภายในบัตร */}
-        <View style={styles.cardBody}>
-          
-          {/* ฝั่งซ้าย: รูปถ่ายน้องแมว + ป้ายสถานะ */}
-          <View style={styles.leftColumn}>
-            <View style={styles.photoFrame}>
-              <Image source={{ uri: `data:image/jpeg;base64,${cat.imageBase64}` }} style={styles.catPhoto} />
-            </View>
-            <View style={[styles.statusTag, { backgroundColor: s.color }]}>
-              <Ionicons name={s.icon} size={11} color="#fff" />
-              <Text style={styles.statusTagText}>{s.label}</Text>
-            </View>
-          </View>
-
-          {/* ฝั่งขวา: รายละเอียดระบุตัวตน */}
-          <View style={styles.rightColumn}>
-            
-            <View style={styles.infoRow}>
-              <Text style={styles.labelTh}>ชื่อภาษาไทย:</Text>
-              <Text style={styles.valueTh}>{cat.name}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.labelTh}>สายพันธุ์:</Text>
-              <Text style={styles.valueEn}>{cat.breed || 'พันธุ์ทาง (Domestic)'}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.labelTh}>เพศ:</Text>
-              <Text style={styles.valueEn}>{sexLabel}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.labelTh}>สีขน:</Text>
-              <Text style={styles.valueEn}>{cat.color}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.labelTh}>วันเกิด / อายุ:</Text>
-              <Text style={styles.valueEn}>{birth || 'ไม่ระบุ'} ({ageDisplay || 'ไม่ทราบอายุ'})</Text>
-            </View>
-
-            {/* 👤 ข้อมูลเจ้าของแมว (อัปเดตดึงจากสถานะล็อกอินปัจจุบัน) */}
-            <View style={styles.ownerDivider} />
-            <View style={styles.infoRow}>
-              <Text style={styles.labelOwner}>ชื่อเจ้าของแมว:</Text>
-              <Text style={styles.valueOwner}>{currentUserName}</Text>
-            </View>
-            {cat.ownerPhone && (
-              <View style={styles.infoRow}>
-                <Text style={styles.labelTh}>ติดต่อ:</Text>
-                <Text style={styles.valueEn}>{cat.ownerPhone}</Text>
-              </View>
-            )}
-
-          </View>
-        </View>
-
-        {/* ลายเซ็นต์/ตราประทับตกแต่งท้ายบัตร */}
-        <View style={styles.cardFooter}>
-          
-          <View style={styles.signatureBox}>
-            <Text style={styles.signatureText}>สมาคมทาสแมวแห่งประเทศไทย</Text>
-          </View>
-        </View>
-        
-        {/* ลายน้ำรูปอุ้งเท้าพื้นหลังเพิ่มความสมจริง */}
-        <View style={styles.watermark}>
-          <Ionicons name="paw" size={140} color="rgba(74, 144, 226, 0.04)" />
-        </View>
+      {/* 📥 ปุ่มสำหรับกด Export (วางด้านบนให้เห็นชัดเจน) */}
+      <View style={styles.exportHeaderRow}>
+        <TouchableOpacity style={styles.exportBtn} onPress={exportCardAsImage} activeOpacity={0.7}>
+          <Ionicons name="download-outline" size={16} color={colors.primary} />
+          <Text style={styles.exportBtnText}>บันทึก/แชร์เป็นรูปภาพ PNG</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* 💳 หุ้มบัตรด้วย ViewShot เพื่อเซฟเฉพาะตัวการ์ด ไม่ติดปุ่มควบคุมส่วนอื่น */}
+      <ViewShot 
+        ref={viewShotRef} 
+        options={{ format: 'png', quality: 1.0 }}
+        style={{ backgroundColor: colors.bg }} 
+      >
+        <View style={styles.idCard}>
+          {/* หัวบัตร */}
+          <View style={styles.cardHeader}>
+            <Ionicons name="paw" size={18} color="#fff" />
+            <Text style={styles.cardHeaderTitle}>บัตรประจำตัวประชากรแมว</Text>
+          </View>
+
+          {/* เนื้อหาภายในบัตร */}
+          <View style={styles.cardBody}>
+            
+            {/* ฝั่งซ้าย: รูปถ่ายน้องแมว + ป้ายสถานะ */}
+            <View style={styles.leftColumn}>
+              <View style={styles.photoFrame}>
+                <Image source={{ uri: `data:image/jpeg;base64,${cat.imageBase64}` }} style={styles.catPhoto} />
+              </View>
+              <View style={[styles.statusTag, { backgroundColor: s.color }]}>
+                <Ionicons name={s.icon} size={11} color="#fff" />
+                <Text style={styles.statusTagText}>{s.label}</Text>
+              </View>
+            </View>
+
+            {/* ฝั่งขวา: รายละเอียดระบุตัวตน */}
+            <View style={styles.rightColumn}>
+              
+              <View style={styles.infoRow}>
+                <Text style={styles.labelTh}>ชื่อภาษาไทย:</Text>
+                <Text style={styles.valueTh}>{cat.name}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.labelTh}>สายพันธุ์:</Text>
+                <Text style={styles.valueEn}>{cat.breed || 'พันธุ์ทาง (Domestic)'}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.labelTh}>เพศ:</Text>
+                <Text style={styles.valueEn}>{sexLabel}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.labelTh}>สีขน:</Text>
+                <Text style={styles.valueEn}>{cat.color}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={styles.labelTh}>วันเกิด / อายุ:</Text>
+                <Text style={styles.valueEn}>{birth || 'ไม่ระบุ'} ({ageDisplay || 'ไม่ทราบอายุ'})</Text>
+              </View>
+
+              {/* 👤 ข้อมูลเจ้าของแมว */}
+              <View style={styles.ownerDivider} />
+              <View style={styles.infoRow}>
+                <Text style={styles.labelOwner}>ชื่อเจ้าของแมว:</Text>
+                <Text style={styles.valueOwner}>{currentUserName}</Text>
+              </View>
+              {cat.ownerPhone && (
+                <View style={styles.infoRow}>
+                  <Text style={styles.labelTh}>ติดต่อ:</Text>
+                  <Text style={styles.valueEn}>{cat.ownerPhone}</Text>
+                </View>
+              )}
+
+            </View>
+          </View>
+
+          {/* ลายเซ็นต์/ตราประทับตกแต่งท้ายบัตร */}
+          <View style={styles.cardFooter}>
+            <View style={styles.signatureBox}>
+              <Text style={styles.signatureText}>สมาคมทาสแมวแห่งประเทศไทย</Text>
+            </View>
+          </View>
+          
+          {/* ลายน้ำรูปอุ้งเท้าพื้นหลังเพิ่มความสมจริง */}
+          <View style={styles.watermark}>
+            <Ionicons name="paw" size={140} color="rgba(0, 0, 0, 0.04)" />
+          </View>
+        </View>
+      </ViewShot>
 
       {/* 📋 รายละเอียดเพิ่มเติมด้านล่างบัตร */}
       <View style={styles.lowerContent}>
@@ -164,15 +201,56 @@ export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, 
   );
 }
 
-// ... คงส่วน styles ของคุณไว้เหมือนเดิมทุกประการ ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  idCard: { backgroundColor: '#F0F5FA', borderWidth: 2, borderColor: '#B8D0EB', borderRadius: 16, margin: 16, overflow: 'hidden', position: 'relative', ...shadow },
-  cardHeader: { backgroundColor: '#4A90E2', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 14 },
-  cardHeaderTitle: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  // สไตล์ที่เพิ่มมาสำหรับปุ่ม Export บันทึกรูปภาพ
+  exportHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    marginTop: 16,
+    marginBottom: -8 
+  },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadowSoft
+  },
+  exportBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4A90E2',
+  },
+  // โครงสร้างสไตล์เดิม
+ idCard: { 
+  backgroundColor: '#FFF3EB', // สีส้มพีชอ่อนมากกก ช่วยให้ดูสะอาดตา
+  borderWidth: 2, 
+  borderColor: '#FFD0B3',     // ขอบสีส้มพาสเทลละมุนๆ
+  borderRadius: 16, 
+  margin: 16, 
+  overflow: 'hidden', 
+  position: 'relative', 
+  ...shadow 
+},
+cardHeader: { 
+  backgroundColor: '#f8791e', // สีส้มสด (Vibrant Orange) เด่นชัดเจน
+  flexDirection: 'row', 
+  alignItems: 'center', 
+  gap: 8, 
+  paddingVertical: 10, 
+  paddingHorizontal: 14 
+},
+cardHeaderTitle: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
   cardBody: { flexDirection: 'row', padding: 14, gap: 14, zIndex: 2 },
   leftColumn: { alignItems: 'center', width: 110 },
-  photoFrame: { width: 110, height: 135, borderRadius: 8, borderWidth: 3, borderColor: '#fff', backgroundColor: '#eee', ...shadowSoft, overflow: 'hidden' },
+  photoFrame: { width: 110, height: 135, borderRadius: 8, borderWidth: 1.5, borderColor: '#f8791e', backgroundColor: '#eee', ...shadowSoft, overflow: 'hidden' },
   catPhoto: { width: '100%', height: '100%', resizeMode: 'cover' },
   statusTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm, marginTop: 10, width: '100%', justifyContent: 'center', ...shadowSoft },
   statusTagText: { color: '#fff', fontWeight: '800', fontSize: 11 },
@@ -181,12 +259,12 @@ const styles = StyleSheet.create({
   labelTh: { fontSize: 11, color: '#7B8EA5', width: 75, fontWeight: '600' },
   valueTh: { fontSize: 18, fontWeight: '800', color: '#2C3E50' },
   valueEn: { fontSize: 13, fontWeight: '700', color: '#34495E' },
-  ownerDivider: { height: 1, backgroundColor: '#D6E4F0', marginVertical: 4 },
-  labelOwner: { fontSize: 11, color: '#4A90E2', width: 75, fontWeight: '700' },
+  ownerDivider: { height: 1, backgroundColor: '#FFD0B3', marginVertical: 4 },
+  labelOwner: { fontSize: 11, color: '#e28c4a', width: 75, fontWeight: '700' },
   valueOwner: { fontSize: 13, fontWeight: '800', color: '#2C3E50' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingBottom: 10, zIndex: 2 },
   cardSerial: { fontSize: 11, fontFamily: 'Courier', fontWeight: '700', color: '#7B8EA5' },
-  signatureBox: { borderTopWidth: 1, borderTopColor: '#A0BCCF', paddingTop: 2 },
+  signatureBox: { borderTopWidth: 1, borderTopColor: '#FFD0B3', paddingTop: 2 },
   signatureText: { fontSize: 9, color: '#7B8EA5', fontStyle: 'italic' },
   watermark: { position: 'absolute', bottom: -20, right: -20, zIndex: 1 },
   lowerContent: { paddingHorizontal: 16 },
@@ -204,6 +282,4 @@ const styles = StyleSheet.create({
   editBtnText: { color: colors.primary, fontWeight: '800', fontSize: 14 },
   deleteBtn: { width: 85, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: radius.md, backgroundColor: colors.lostSoft },
   deleteBtnText: { color: colors.lost, fontWeight: '800', fontSize: 14 },
-
 });
-
