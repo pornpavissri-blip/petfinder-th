@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,9 +7,18 @@ import { colors, radius, shadow, daysAgo } from '../theme';
 import { formatDistance } from '../services/location';
 import { getOrCreateChat } from '../services/chatService';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 export default function PostDetail({ cat, distanceKm, onBack, navigation }) {
   const insets = useSafeAreaInsets();
   const [chatLoading, setChatLoading] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0); // เก็บตำแหน่งรูปปัจจุบันที่เลื่อนอยู่
+
+  // รวมรูปหลัก และ รูปเสริม (ถ้ามี) เข้าไว้ด้วยกันในอาร์เรย์เดียวเพื่อใช้วนนลูปสไลด์
+  const allImages = [
+    cat.imageBase64,
+    ...(cat.extraImages || [])
+  ].filter(Boolean); // กรองค่าเผื่อกรณีข้อมูลเป็น null หรือ undefined
 
   const openChat = async () => {
     setChatLoading(true);
@@ -45,19 +54,62 @@ export default function PostDetail({ cat, distanceKm, onBack, navigation }) {
     ]);
   };
 
+  // คอยคำนวณว่าตอนผู้ใช้รูดสไลด์ภาพ อยู่ที่รูปที่เท่าไหร่แล้ว
+  const handleScroll = (event) => {
+    const slide = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    if (slide !== activeImageIndex) {
+      setActiveImageIndex(slide);
+    }
+  };
+
   const dist = formatDistance(distanceKm);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* 🖼️ ส่วนแสดงสไลด์รูปภาพเลื่อนได้ */}
       <View style={styles.imgWrap}>
-        <Image source={{ uri: `data:image/jpeg;base64,${cat.imageBase64}` }} style={styles.img} />
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          style={styles.imageSlider}
+        >
+          {allImages.map((b64, index) => (
+            <Image
+              key={index}
+              source={{ uri: `data:image/jpeg;base64,${b64}` }}
+              style={styles.img}
+            />
+          ))}
+        </ScrollView>
+
+        {/* ปุ่มกดกลับ (Overlay อยู่บนรูป) */}
         <TouchableOpacity style={[styles.back, { top: insets.top + 6 }]} onPress={onBack}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
+
+        {/* แท็กสถานะกำลังตามหา */}
         <View style={styles.lostBadge}>
           <Ionicons name="alert-circle" size={14} color="#fff" />
           <Text style={styles.lostBadgeText}>กำลังตามหา • {daysAgo(cat.lostAt)}</Text>
         </View>
+
+        {/* 🔘 จุดระบุตำแหน่งรูปภาพ (Dots Indicator) จะขึ้นเมื่อมีมากกว่า 1 รูป */}
+        {allImages.length > 1 && (
+          <View style={styles.pagination}>
+            {allImages.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  activeImageIndex === index ? styles.activeDot : styles.inactiveDot
+                ]}
+              />
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={styles.body}>
@@ -120,11 +172,18 @@ export default function PostDetail({ cat, distanceKm, onBack, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  imgWrap: { position: 'relative' },
-  img: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
-  back: { position: 'absolute', left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
-  lostBadge: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.lost, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full },
+  imgWrap: { position: 'relative', width: SCREEN_WIDTH, aspectRatio: 1 },
+  imageSlider: { width: SCREEN_WIDTH, height: '100%' },
+  img: { width: SCREEN_WIDTH, height: '100%', backgroundColor: '#eee', resizeMode: 'cover' },
+  back: { position: 'absolute', left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  lostBadge: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.lost, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full, zIndex: 10 },
   lostBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  // สไตล์สำหรับจุดสไลด์รูปภาพ (Pagination Dots)
+  pagination: { position: 'absolute', bottom: 16, right: 16, flexDirection: 'row', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: radius.full, zIndex: 10 },
+  dot: { height: 6, borderRadius: 3 },
+  activeDot: { width: 14, backgroundColor: '#fff' },
+  inactiveDot: { width: 6, backgroundColor: 'rgba(255,255,255,0.5)' },
 
   body: { padding: 20 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
