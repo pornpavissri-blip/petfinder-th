@@ -270,7 +270,7 @@ export default function MapScreen({ navigation }) {
     <View style={styles.root}>
       <GradientHeader
         title="แผนที่"
-        emoji="🗺️"
+        icon="map"
         subtitle={filteredItems.length
           ? `${filteredItems.length} จุด • แตะหมุดเพื่อดูรายละเอียด`
           : 'ตำแหน่งแมวหาย & คนเจอ'}
