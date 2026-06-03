@@ -117,7 +117,7 @@ export default function ProfileScreen({ onLogout }) {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="โปรไฟล์" emoji="👤" />
+        <GradientHeader title="โปรไฟล์" icon="person" />
         <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
       </View>
     );
@@ -125,7 +125,7 @@ export default function ProfileScreen({ onLogout }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <GradientHeader title="โปรไฟล์" emoji="👤" />
+      <GradientHeader title="โปรไฟล์" icon="person" />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
         {/* identity card */}
@@ -197,7 +197,10 @@ export default function ProfileScreen({ onLogout }) {
 
         {/* demo tools */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🧪 เครื่องมือเดโม่</Text>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="construct" size={16} color={colors.text} style={{ marginRight: 6 }} />
+            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>เครื่องมือเดโม่</Text>
+          </View>
           <Text style={styles.demoHint}>สร้างแมวหายจำลองกระจายบนแผนที่ สำหรับนำเสนอ</Text>
           <TouchableOpacity style={styles.seedBtn} onPress={runSeed} disabled={seeding} activeOpacity={0.85}>
             {seeding ? <ActivityIndicator color="#fff" /> : (
@@ -211,7 +214,7 @@ export default function ProfileScreen({ onLogout }) {
             {seeding ? <ActivityIndicator color="#fff" /> : (
               <>
                 <Ionicons name="globe" size={18} color="#fff" />
-                <Text style={styles.seedText}>🇹🇭 เจนแมวทั้งประเทศ (จังหวัดละ 2-3)</Text>
+                <Text style={styles.seedText}>เจนแมวทั้งประเทศ (จังหวัดละ 2-3)</Text>
               </>
             )}
           </TouchableOpacity>
@@ -258,6 +261,7 @@ const styles = StyleSheet.create({
 
   section: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 20, marginTop: 16, ...shadowSoft },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 14 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   aboutRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   aboutText: { flex: 1, fontSize: 14, color: colors.sub, lineHeight: 20 },
 
