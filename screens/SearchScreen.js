@@ -179,7 +179,7 @@ export default function SearchScreen({ navigation }) {
           </View>
           <View style={[styles.confBadge, { backgroundColor: isLost ? colors.lostSoft : colors.rewardSoft }]}>
             <Text style={[styles.confText, { color: isLost ? colors.lost : '#B8780A' }]}>
-              {isLost ? '🔴 มั่นใจว่าแมวหาย' : '🟡 อาจเป็นจร/หาย'}
+              {isLost ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'}
             </Text>
           </View>
 
@@ -272,10 +272,10 @@ export default function SearchScreen({ navigation }) {
               {/* tab switcher */}
               <View style={styles.tabs}>
                 <TouchableOpacity style={[styles.tabBtn, tab === 'found' && styles.tabActive]} onPress={() => setTab('found')}>
-                  <Text style={[styles.tabText, tab === 'found' && styles.tabTextActive]}>🔵 เจอแมว</Text>
+                  <Text style={[styles.tabText, tab === 'found' && styles.tabTextActive]}>เจอแมว</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.tabBtn, tab === 'lost' && styles.tabActive]} onPress={() => setTab('lost')}>
-                  <Text style={[styles.tabText, tab === 'lost' && styles.tabTextActive]}>🔴 แมวหาย</Text>
+                  <Text style={[styles.tabText, tab === 'lost' && styles.tabTextActive]}>แมวหาย</Text>
                 </TouchableOpacity>
               </View>
 
