@@ -15,6 +15,9 @@ import ReportLostForm from '../components/ReportLostForm';
 import CatProfileCard from '../components/CatProfileCard';
 import { colors, radius, shadow, statusInfo, displayAge } from '../theme';
 
+// 🔹 ดึงรูปภาพ Assets โลโก้เข้ามาใช้งานแทน Emoji
+const catAvatar = require('../assets/Logo.png');
+
 export default function MyCatsScreen() {
   const insets = useSafeAreaInsets();
   const [showForm, setShowForm] = useState(false);
@@ -106,7 +109,24 @@ export default function MyCatsScreen() {
   if (selectedCat) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title={selectedCat.name} subtitle="โปรไฟล์น้องแมว" emoji="🐾" onClose={() => setSelectedCat(null)} />
+        
+        {/* 🛠️ ปรับโครงสร้างส่วนหัวหน้าโปรไฟล์ให้แสดงรูปโลโก้แทนการใช้ Emoji และไม่ซ้อนทับกัน */}
+        <View style={styles.inlineHeaderOuterContainer}>
+          <View style={styles.inlineHeaderInnerWrapper}>
+            {/* โลโก้ Assets วางตำแหน่งขอบซ้ายอย่างสวยงาม */}
+            <Image source={catAvatar} style={styles.inlineHeaderLogoLeft} resizeMode="contain" />
+            
+            {/* กล่องข้อความหัวเรื่อง ขยับหลบโลโก้ไปทางขวาโดยใช้สไตล์ชุดเดิม */}
+            <View style={styles.gradientHeaderWrapper}>
+              <GradientHeader 
+                title={selectedCat.name} 
+                subtitle="โปรไฟล์น้องแมว" 
+                onClose={() => setSelectedCat(null)} 
+              />
+            </View>
+          </View>
+        </View>
+
         <CatProfileCard
           cat={selectedCat}
           onEdit={(c) => setEditCat(c)}
@@ -158,8 +178,22 @@ export default function MyCatsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <GradientHeader title="แมวของฉัน" emoji="🐱"
-        subtitle={cats.length ? `${cats.length} ตัว${lostCount ? ` • หายอยู่ ${lostCount}` : ''}` : 'ยังไม่มีน้องแมว'} />
+      
+      {/* 🛠️ ส่วนหัวโครงสร้างใหม่ แทรกรูปจาก Assets วางข้างหน้าตัวหนังสือแทน Emoji */}
+      <View style={styles.inlineHeaderOuterContainer}>
+        <View style={styles.inlineHeaderInnerWrapper}>
+          {/* รูปภาพโลโก้จาก Assets จัดวางตำแหน่งที่ขอบซ้ายอย่างถูกต้อง */}
+          <Image source={catAvatar} style={styles.inlineHeaderLogoLeft} resizeMode="contain" />
+          
+          {/* ขยับเนื้อหาของกล่องข้อความ GradientHeader หลบทางขวาเพื่อไม่ให้ทับกับโลโก้ */}
+          <View style={styles.gradientHeaderWrapper}>
+            <GradientHeader 
+              title="แมวของฉัน" 
+              subtitle={cats.length ? `${cats.length} ตัว${lostCount ? ` • หายอยู่ ${lostCount}` : ''}` : 'ยังไม่มีน้องแมว'} 
+            />
+          </View>
+        </View>
+      </View>
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
@@ -214,6 +248,33 @@ const styles = StyleSheet.create({
   emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 24, height: 52, borderRadius: radius.full },
   emptyBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   fab: { position: 'absolute', right: 20, bottom: 24, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadow },
+
+  // 💡 โครงสร้างชุดสไตล์สำหรับเปิดพื้นที่ Layout ส่วนหัวไม่ให้ทับซ้อนกัน
+   // 💡 โครงสร้างชุดสไตล์สำหรับจัดระยะ Layout ส่วนหัวแบบกระจายเนื้อหา ไม่ซ้อนทับกัน
+  inlineHeaderOuterContainer: {
+    backgroundColor: 'transparent',
+    zIndex: 10,
+  },
+  inlineHeaderInnerWrapper: {
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  gradientHeaderWrapper: {
+    width: '100%',
+    // ดันข้อความด้านในของ GradientHeader ให้ขยับไปทางขวา 62px เพื่อให้พ้นจากกรอบของภาพโลโก้
+    paddingLeft: 62, 
+  },
+  inlineHeaderLogoLeft: {
+    width: 100,                  // แก้ไข: ใช้ตัวเลขล้วน ห้ามใส่ "px"
+    height: 100,                 // แก้ไข: พิมพ์คำว่า height ให้ถูกต้อง และใช้ตัวเลขล้วน
+    position: 'absolute',
+    left: -5,                   // ระยะห่างจากขอบซ้ายจอ
+    bottom: -15,                 // ปรับให้อยู่กึ่งกลางระนาบเดียวกับ Title/Subtitle พอดีอย่างสมมาตร
+    borderRadius: 25,           // แก้ไข: ปรับเป็น 25 (ครึ่งหนึ่งของ 50) เพื่อให้เป็นวงกลมที่สมบูรณ์
+    zIndex: 99,                 // ป้องกันไม่ให้โดนพื้นหลังของคอมโพเนนต์อื่น ๆ วาดทับ
+    
+    ...shadow,                  // ใส่เงาเพิ่มมิติความลอยเด่นของโลโก้
+  },
 
   // bottom sheet
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
