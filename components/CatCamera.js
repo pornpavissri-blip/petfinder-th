@@ -175,4 +175,6 @@ const styles = StyleSheet.create({
   shutter: { width: 76, height: 76, borderRadius: 38, borderWidth: 5, borderColor: '#fff', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.2)' },
   shutterInner: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff' },
   shutterHint: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '700', textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 3 },
+
 });
+

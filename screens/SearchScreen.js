@@ -419,3 +419,4 @@ const styles = StyleSheet.create({
   sortChipText: { fontSize: 12, fontWeight: '600', color: colors.sub },
   sortChipTextActive: { color: '#fff', fontWeight: '700' },
 });
+

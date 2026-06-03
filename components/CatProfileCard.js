@@ -204,4 +204,6 @@ const styles = StyleSheet.create({
   editBtnText: { color: colors.primary, fontWeight: '800', fontSize: 14 },
   deleteBtn: { width: 85, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 48, borderRadius: radius.md, backgroundColor: colors.lostSoft },
   deleteBtnText: { color: colors.lost, fontWeight: '800', fontSize: 14 },
+
 });
+
