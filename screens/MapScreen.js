@@ -683,3 +683,4 @@ const styles = StyleSheet.create({
   },
   btnDeleteText: { color: colors.lost, fontWeight: '800', fontSize: 14 },
 });
+
