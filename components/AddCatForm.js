@@ -1,3 +1,4 @@
+// components/AddCatForm.js
 import { useState } from 'react';
 import {
   StyleSheet, Text, View, TextInput, TouchableOpacity, Image,
@@ -21,18 +22,22 @@ export const CAT_BREEDS = [
   'เมนคูน', 'เบงกอล', 'แร็กดอลล์', 'สฟิงซ์', 'มันช์กิน', 'เอ็กโซติก',
 ];
 
-// editCat = ส่งมาเมื่ออยู่ในโหมด "แก้ไข" (เติมข้อมูลเดิม + บันทึกทับ)
 export default function AddCatForm({ onAdded, editCat }) {
   const isEdit = !!editCat;
 
-  // ---- รูป ----
+  // ---- 📸 รูปหลัก ----
   const [imageUri, setImageUri] = useState(editCat ? `data:image/jpeg;base64,${editCat.imageBase64}` : null);
   const [imageBase64, setImageBase64] = useState(editCat?.imageBase64 || null);
   const [name, setName] = useState(editCat?.name || '');
 
+  // ---- 🖼️ รูปภาพเพิ่มเติม (สูงสุด 3 รูป) ----
+  const [extraImages, setExtraImages] = useState(
+    editCat?.extraImages ? editCat.extraImages.map(b64 => ({ uri: `data:image/jpeg;base64,${b64}`, base64: b64 })) : []
+  );
+
   // ---- สี (มีตัวเลือก + พิมพ์เอง) ----
   const editColorIsCustom = !!editCat?.color && !CAT_COLORS.includes(editCat.color);
-  const [colorMode, setColorMode] = useState(editColorIsCustom ? 'custom' : 'preset'); // preset | custom
+  const [colorMode, setColorMode] = useState(editColorIsCustom ? 'custom' : 'preset'); 
   const [color, setColor] = useState(editColorIsCustom ? null : (editCat?.color || null));
   const [customColor, setCustomColor] = useState(editColorIsCustom ? editCat.color : '');
 
@@ -45,38 +50,68 @@ export default function AddCatForm({ onAdded, editCat }) {
   const [showBreed, setShowBreed] = useState(false);
 
   // ---- วันเกิด (เลือกไม่ทราบได้) ----
-  const [birthDate, setBirthDate] = useState(editCat?.birthDate || null); // 'YYYY-MM-DD'
+  const [birthDate, setBirthDate] = useState(editCat?.birthDate || null); 
   const [ageUnknown, setAgeUnknown] = useState(editCat?.ageUnknown || false);
 
   const [notes, setNotes] = useState(editCat?.notes || '');
   const [saving, setSaving] = useState(false);
+  
   const [showCamera, setShowCamera] = useState(false);
+  const [isPickingExtra, setIsPickingExtra] = useState(false); // เช็กว่าเปิดกล้องเพื่อถ่ายรูปหลักหรือรูปเสริม
   const [showDOB, setShowDOB] = useState(false);
 
   const effectiveColor = colorMode === 'custom' ? customColor.trim() : color;
 
-  const processImage = async (uri) => {
+  // ฟังก์ชันย่อขนาดรูปภาพและแปลงเป็น Base64
+  const processImage = async (uri, isExtra = false) => {
     try {
       const result = await ImageManipulator.manipulateAsync(
         uri,
         [{ resize: { width: 600 } }],
         { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
       );
-      setImageUri(result.uri);
-      setImageBase64(result.base64);
+
+      if (isExtra) {
+        setExtraImages(prev => [...prev, { uri: result.uri, base64: result.base64 }]);
+      } else {
+        setImageUri(result.uri);
+        setImageBase64(result.base64);
+      }
     } catch (e) {
       console.log('Image process error:', e);
       Alert.alert('รูปภาพมีปัญหา', 'ลองเลือกรูปใหม่อีกครั้ง');
     }
   };
 
-  const pickImage = async () => {
+  // เลือกรูปจากคลังภาพ
+  const pickImage = async (isExtra = false) => {
+    if (isExtra && extraImages.length >= 3) {
+      Alert.alert('จำกัดจำนวน', 'เพิ่มรูปภาพเพิ่มเติมได้สูงสุด 3 รูปเท่านั้น');
+      return;
+    }
+
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'กรุณาอนุญาตให้เข้าถึงคลังรูปภาพ'); return; }
+    
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
-    if (!result.canceled) processImage(result.assets[0].uri);
+    if (!result.canceled) processImage(result.assets[0].uri, isExtra);
+  };
+
+  // เปิดกล้องสำหรับถ่ายรูปเสริม
+  const handleOpenExtraCamera = () => {
+    if (extraImages.length >= 3) {
+      Alert.alert('จำกัดจำนวน', 'เพิ่มรูปภาพเพิ่มเติมได้สูงสุด 3 รูปเท่านั้น');
+      return;
+    }
+    setIsPickingExtra(true);
+    setShowCamera(true);
+  };
+
+  // ลบรูปภาพเพิ่มเติมออก
+  const removeExtraImage = (index) => {
+    setExtraImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const pickBreed = (b) => {
@@ -86,12 +121,15 @@ export default function AddCatForm({ onAdded, editCat }) {
   };
 
   const handleSave = async () => {
-    if (!imageBase64) { Alert.alert('ยังไม่มีรูป', 'กรุณาเพิ่มรูปน้องแมว'); return; }
+    if (!imageBase64) { Alert.alert('ยังไม่มีรูป', 'กรุณาเพิ่มรูปหลักของน้องแมว'); return; }
     if (!name.trim()) { Alert.alert('ยังไม่มีชื่อ', 'กรุณาตั้งชื่อน้องแมว'); return; }
     if (!effectiveColor) { Alert.alert('ยังไม่เลือกสี', 'กรุณาเลือกหรือพิมพ์สีน้องแมว'); return; }
 
     setSaving(true);
     try {
+      // ดึงเฉพาะตัว Base64 จาก Array รูปเพิ่มเติมเพื่อเตรียมส่งไปเซิร์ฟเวอร์
+      const extraImagesBase64Array = extraImages.map(img => img.base64);
+
       const common = {
         name: name.trim(),
         color: effectiveColor,
@@ -101,7 +139,9 @@ export default function AddCatForm({ onAdded, editCat }) {
         ageUnknown: !!ageUnknown,
         notes: notes.trim(),
         imageBase64,
+        extraImages: extraImagesBase64Array, // ผูกฟิลด์บันทึกอาเรย์รูปภาพเพิ่มเติม
       };
+
       if (isEdit) {
         await updateDoc(doc(db, 'cats', editCat.id), common);
         Alert.alert('บันทึกแล้ว ✏️', `อัปเดตข้อมูลน้อง "${name.trim()}" เรียบร้อย`);
@@ -125,8 +165,11 @@ export default function AddCatForm({ onAdded, editCat }) {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+        
+        {/* 📸 ส่วนเลือกรูปภาพหลัก */}
+        <Text style={styles.label}>รูปภาพหลักน้องแมว *</Text>
         {imageUri ? (
-          <TouchableOpacity onPress={() => setShowCamera(true)} style={styles.imageBox} activeOpacity={0.9}>
+          <TouchableOpacity onPress={() => { setIsPickingExtra(false); setShowCamera(true); }} style={styles.imageBox} activeOpacity={0.9}>
             <Image source={{ uri: imageUri }} style={styles.image} />
             <View style={styles.imageEdit}>
               <Ionicons name="camera" size={16} color="#fff" />
@@ -136,19 +179,52 @@ export default function AddCatForm({ onAdded, editCat }) {
         ) : (
           <View style={styles.imagePlaceholder}>
             <Ionicons name="image-outline" size={48} color={colors.faint} />
-            <Text style={styles.placeholderText}>เพิ่มรูปน้องแมว</Text>
+            <Text style={styles.placeholderText}>เพิ่มรูปหลักน้องแมว</Text>
             <View style={styles.imageButtons}>
-              <TouchableOpacity style={styles.imgBtn} onPress={() => setShowCamera(true)}>
+              <TouchableOpacity style={styles.imgBtn} onPress={() => { setIsPickingExtra(false); setShowCamera(true); }}>
                 <Ionicons name="camera" size={18} color={colors.primary} />
                 <Text style={styles.imgBtnText}>ถ่ายรูป</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.imgBtn} onPress={pickImage}>
+              <TouchableOpacity style={styles.imgBtn} onPress={() => pickImage(false)}>
                 <Ionicons name="images" size={18} color={colors.primary} />
                 <Text style={styles.imgBtnText}>เลือกจากคลัง</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* 🖼️ ส่วนจัดการรูปภาพเพิ่มเติม (แยกบรรทัดปุ่มชัดเจน) */}
+        <Text style={styles.label}>รูปภาพเพิ่มเติมอื่น ๆ ({extraImages.length}/3 รูป)</Text>
+        <View style={styles.extraSectionContainer}>
+          
+          {/* แถวที่ 1: แสดงลิสต์รูปภาพเสริมตัวเล็กเมื่อมีการเลือกเข้ามา */}
+          {extraImages.length > 0 && (
+            <View style={styles.extraImagesRow}>
+              {extraImages.map((item, index) => (
+                <View key={index} style={styles.extraImageWrapper}>
+                  <Image source={{ uri: item.uri }} style={styles.extraImage} />
+                  <TouchableOpacity style={styles.removeExtraBtn} onPress={() => removeExtraImage(index)}>
+                    <Ionicons name="close-circle" size={22} color="#ff4d4d" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* แถวที่ 2: ปุ่มกดถ่ายรูป/เพิ่มรูป แบบแยกแถวหน้ากระดานด้านล่าง */}
+          {extraImages.length < 3 && (
+            <View style={styles.addExtraButtonsRow}>
+              <TouchableOpacity style={styles.addExtraBtn} onPress={handleOpenExtraCamera}>
+                <Ionicons name="camera-outline" size={18} color={colors.primary} />
+                <Text style={styles.addExtraBtnText}>ถ่ายรูปเพิ่มเติม</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addExtraBtn} onPress={() => pickImage(true)}>
+                <Ionicons name="images-outline" size={18} color={colors.primary} />
+                <Text style={styles.addExtraBtnText}>เลือกจากคลัง</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
 
         <Text style={styles.label}>ชื่อน้องแมว *</Text>
         <TextInput style={styles.input} placeholder="เช่น สมโชค" placeholderTextColor={colors.faint} value={name} onChangeText={setName} />
@@ -249,11 +325,11 @@ export default function AddCatForm({ onAdded, editCat }) {
         </TouchableOpacity>
         <View style={{ height: 40 }} />
 
-        {/* กล้องในแอป + กรอบเล็งหน้าแมว */}
+        {/* กล้องถ่ายรูป */}
         <CatCamera
           visible={showCamera}
           onClose={() => setShowCamera(false)}
-          onCapture={(uri) => { setShowCamera(false); processImage(uri); }}
+          onCapture={(uri) => { setShowCamera(false); processImage(uri, isPickingExtra); }}
         />
         {/* ตัวเลือกวันเกิด */}
         <DOBPicker
@@ -322,6 +398,17 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.sub, fontWeight: '600', fontSize: 14 },
   chipTextActive: { color: '#fff' },
+
+  // โซนจัดการรูปภาพเพิ่มเติม (Extra Images Style แบบแยกบรรทัด)
+  extraSectionContainer: { backgroundColor: colors.card, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginTop: 4 },
+  extraImagesRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  extraImageWrapper: { width: 75, height: 75, position: 'relative', ...shadow },
+  extraImage: { width: '100%', height: '100%', borderRadius: radius.md, resizeMode: 'cover' },
+  removeExtraBtn: { position: 'absolute', top: -6, right: -6, backgroundColor: '#fff', borderRadius: 10 },
+  
+  addExtraButtonsRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  addExtraBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary, borderStyle: 'dashed', height: 44, borderRadius: radius.md },
+  addExtraBtnText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
 
   save: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, height: 56, borderRadius: radius.md, marginTop: 28 },
   saveText: { color: '#fff', fontSize: 17, fontWeight: '800' },
