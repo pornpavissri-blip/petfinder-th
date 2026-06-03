@@ -12,14 +12,15 @@ import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
 import AddCatForm from '../components/AddCatForm';
 import ReportLostForm from '../components/ReportLostForm';
-import { colors, radius, shadow, statusInfo } from '../theme';
+import CatProfileCard from '../components/CatProfileCard';
+import { colors, radius, shadow, statusInfo, displayAge } from '../theme';
 
 export default function MyCatsScreen() {
   const insets = useSafeAreaInsets();
   const [showForm, setShowForm] = useState(false);
   const [reportLostCat, setReportLostCat] = useState(null);
   const [editCat, setEditCat] = useState(null);
-  const [menuCat, setMenuCat] = useState(null);
+  const [selectedCat, setSelectedCat] = useState(null);
   const [cats, setCats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,6 +51,7 @@ export default function MyCatsScreen() {
             await updateDoc(doc(db, 'cats', cat.id), {
               status: 'home', lostAt: null, lostLat: null, lostLng: null, reward: 0, lostNote: '',
             });
+            setSelectedCat((p) => (p ? { ...p, status: 'home', reward: 0, lostNote: '' } : p));
             fetchCats();
           } catch (e) { Alert.alert('ผิดพลาด', 'ลองใหม่อีกครั้ง'); }
         },
@@ -63,7 +65,7 @@ export default function MyCatsScreen() {
       {
         text: 'ลบ', style: 'destructive',
         onPress: async () => {
-          try { await deleteDoc(doc(db, 'cats', cat.id)); fetchCats(); }
+          try { await deleteDoc(doc(db, 'cats', cat.id)); setSelectedCat(null); fetchCats(); }
           catch (e) { console.log('Delete error:', e); Alert.alert('ผิดพลาด', 'ลบไม่สำเร็จ ลองใหม่'); }
         },
       },
@@ -85,7 +87,7 @@ export default function MyCatsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <GradientHeader title="แก้ไขข้อมูลน้อง" subtitle={editCat.name} emoji="✏️" onClose={() => setEditCat(null)} />
-        <AddCatForm editCat={editCat} onAdded={() => { setEditCat(null); fetchCats(); }} />
+        <AddCatForm editCat={editCat} onAdded={() => { setEditCat(null); setSelectedCat(null); fetchCats(); }} />
       </View>
     );
   }
@@ -95,7 +97,23 @@ export default function MyCatsScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <GradientHeader title="แจ้งแมวหาย" subtitle="ลงประกาศตามหาน้อง" emoji="🔴" onClose={() => setReportLostCat(null)} />
-        <ReportLostForm cat={reportLostCat} onDone={() => { setReportLostCat(null); fetchCats(); }} />
+        <ReportLostForm cat={reportLostCat} onDone={() => { setReportLostCat(null); setSelectedCat(null); fetchCats(); }} />
+      </View>
+    );
+  }
+
+  // ---- โปรไฟล์น้องแมว (กดที่การ์ด) ----
+  if (selectedCat) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <GradientHeader title={selectedCat.name} subtitle="โปรไฟล์น้องแมว" emoji="🐾" onClose={() => setSelectedCat(null)} />
+        <CatProfileCard
+          cat={selectedCat}
+          onEdit={(c) => setEditCat(c)}
+          onReportLost={(c) => setReportLostCat(c)}
+          onMarkHome={markHome}
+          onDelete={deleteCat}
+        />
       </View>
     );
   }
@@ -105,8 +123,9 @@ export default function MyCatsScreen() {
   const renderCat = ({ item }) => {
     const s = statusInfo(item.status);
     const isLost = item.status === 'lost';
+    const age = displayAge(item);
     return (
-      <View style={styles.card}>
+      <TouchableOpacity style={styles.card} activeOpacity={0.92} onPress={() => setSelectedCat(item)}>
         <Image source={{ uri: `data:image/jpeg;base64,${item.imageBase64}` }} style={styles.catImage} />
         <View style={styles.catBody}>
           <View style={styles.catTop}>
@@ -115,11 +134,8 @@ export default function MyCatsScreen() {
               <Ionicons name={s.icon} size={13} color={s.color} />
               <Text style={[styles.badgeText, { color: s.color }]}>{s.label}</Text>
             </View>
-            <TouchableOpacity style={styles.kebab} onPress={() => setMenuCat(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="ellipsis-vertical" size={18} color={colors.sub} />
-            </TouchableOpacity>
           </View>
-          <Text style={styles.catMeta}>สี{item.color}{item.breed ? ` • ${item.breed}` : ''}{item.age ? ` • ${item.age}` : ''}{item.sex === 'ผู้' ? ' • ♂ ผู้' : item.sex === 'เมีย' ? ' • ♀ เมีย' : ''}</Text>
+          <Text style={styles.catMeta}>สี{item.color}{item.breed ? ` • ${item.breed}` : ''}{age ? ` • ${age}` : ''}{item.sex === 'ผู้' ? ' • ♂ ผู้' : item.sex === 'เมีย' ? ' • ♀ เมีย' : ''}</Text>
           {isLost && item.reward > 0 && (
             <Text style={styles.rewardLine}>💰 รางวัล {Number(item.reward).toLocaleString()} บาท</Text>
           )}
@@ -136,7 +152,7 @@ export default function MyCatsScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -170,41 +186,6 @@ export default function MyCatsScreen() {
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
       )}
-
-      {/* เมนูจัดการน้องแมว (แก้ไข / ลบ) */}
-      <Modal visible={!!menuCat} transparent animationType="slide" onRequestClose={() => setMenuCat(null)}>
-        <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setMenuCat(null)}>
-          <TouchableOpacity activeOpacity={1} style={[styles.sheet, { paddingBottom: insets.bottom + 14 }]} onPress={() => {}}>
-            <View style={styles.grabber} />
-            {menuCat && (
-              <View style={styles.sheetHead}>
-                <Image source={{ uri: `data:image/jpeg;base64,${menuCat.imageBase64}` }} style={styles.sheetThumb} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sheetName} numberOfLines={1}>{menuCat.name}</Text>
-                  <Text style={styles.sheetSub}>จัดการข้อมูลน้องแมว</Text>
-                </View>
-              </View>
-            )}
-            <TouchableOpacity style={styles.sheetOpt} onPress={() => { const c = menuCat; setMenuCat(null); setEditCat(c); }}>
-              <View style={[styles.sheetIcon, { backgroundColor: colors.primarySoft }]}>
-                <Ionicons name="create-outline" size={20} color={colors.primary} />
-              </View>
-              <Text style={styles.sheetOptText}>แก้ไขข้อมูล</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.faint} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.sheetOpt} onPress={() => { const c = menuCat; setMenuCat(null); deleteCat(c); }}>
-              <View style={[styles.sheetIcon, { backgroundColor: colors.lostSoft }]}>
-                <Ionicons name="trash-outline" size={20} color={colors.lost} />
-              </View>
-              <Text style={[styles.sheetOptText, { color: colors.lost }]}>ลบน้องแมว</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.faint} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.sheetCancel} onPress={() => setMenuCat(null)}>
-              <Text style={styles.sheetCancelText}>ยกเลิก</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
 }

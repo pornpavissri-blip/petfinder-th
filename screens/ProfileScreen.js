@@ -1,17 +1,14 @@
 import { useState, useCallback } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, TextInput, Image,
+  StyleSheet, Text, View, TouchableOpacity, TextInput,
   ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
-import AddCatForm from '../components/AddCatForm';
-import ReportLostForm from '../components/ReportLostForm';
-import CatProfileCard from '../components/CatProfileCard';
 import { seedDemoCats, seedCountryCats, clearDemoCats } from '../services/demoSeed';
 import { colors, radius, shadow, shadowSoft } from '../theme';
 
@@ -21,11 +18,6 @@ export default function ProfileScreen({ onLogout }) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [stats, setStats] = useState({ total: 0, lost: 0 });
-  const [myCats, setMyCats] = useState([]);
-  const [showAddCat, setShowAddCat] = useState(false);
-  const [selectedCat, setSelectedCat] = useState(null);
-  const [editCat, setEditCat] = useState(null);
-  const [reportLostCat, setReportLostCat] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [seeding, setSeeding] = useState(false);
@@ -93,50 +85,14 @@ export default function ProfileScreen({ onLogout }) {
       setName(n || '');
       if (p) {
         const snap = await getDocs(query(collection(db, 'cats'), where('ownerPhone', '==', p)));
-        const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        docs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-        setMyCats(docs);
-        setStats({ total: docs.length, lost: docs.filter((c) => c.status === 'lost').length });
+        const all = snap.docs.map((d) => d.data());
+        setStats({ total: all.length, lost: all.filter((c) => c.status === 'lost').length });
       }
     } catch (e) { console.log('Profile load error:', e); }
     setLoading(false);
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const markHome = (cat) => {
-    Alert.alert('ยืนยัน', `น้อง "${cat.name}" กลับบ้านแล้ว?`, [
-      { text: 'ยกเลิก', style: 'cancel' },
-      {
-        text: 'กลับบ้านแล้ว',
-        onPress: async () => {
-          try {
-            await updateDoc(doc(db, 'cats', cat.id), {
-              status: 'home', lostAt: null, lostLat: null, lostLng: null, reward: 0, lostNote: '',
-            });
-            setSelectedCat((p) => (p ? { ...p, status: 'home', reward: 0, lostNote: '' } : p));
-            load();
-          } catch (e) { Alert.alert('ผิดพลาด', 'ลองใหม่อีกครั้ง'); }
-        },
-      },
-    ]);
-  };
-
-  const deleteCat = (cat) => {
-    Alert.alert('ลบน้องแมว?', `จะลบน้อง "${cat.name}" ออกถาวร กู้คืนไม่ได้`, [
-      { text: 'ยกเลิก', style: 'cancel' },
-      {
-        text: 'ลบ', style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'cats', cat.id));
-            setSelectedCat(null);
-            load();
-          } catch (e) { Alert.alert('ผิดพลาด', 'ลบไม่สำเร็จ ลองใหม่'); }
-        },
-      },
-    ]);
-  };
 
   const saveName = async () => {
     setSaving(true);
@@ -157,52 +113,6 @@ export default function ProfileScreen({ onLogout }) {
   };
 
   const initial = (name || 'M').trim().charAt(0).toUpperCase();
-
-  // ---- แก้ไขข้อมูลน้อง ----
-  if (editCat) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="แก้ไขข้อมูลน้อง" subtitle={editCat.name} emoji="✏️" onClose={() => setEditCat(null)} />
-        <AddCatForm editCat={editCat} onAdded={() => { setEditCat(null); setSelectedCat(null); load(); }} />
-      </View>
-    );
-  }
-
-  // ---- แจ้งน้องหาย ----
-  if (reportLostCat) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="แจ้งแมวหาย" subtitle="ลงประกาศตามหาน้อง" emoji="🔴" onClose={() => setReportLostCat(null)} />
-        <ReportLostForm cat={reportLostCat} onDone={() => { setReportLostCat(null); setSelectedCat(null); load(); }} />
-      </View>
-    );
-  }
-
-  // ---- ฟอร์มเพิ่มน้องแมว (เปิดจากปุ่ม + ใน My Family) ----
-  if (showAddCat) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title="เพิ่มน้องแมว" subtitle="เพิ่มสมาชิกครอบครัว" emoji="🐾" onClose={() => setShowAddCat(false)} />
-        <AddCatForm onAdded={() => { setShowAddCat(false); load(); }} />
-      </View>
-    );
-  }
-
-  // ---- โปรไฟล์น้องแมว (กดจาก "ครอบครัวของฉัน") ----
-  if (selectedCat) {
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.bg }}>
-        <GradientHeader title={selectedCat.name} subtitle="โปรไฟล์น้องแมว" emoji="🐾" onClose={() => setSelectedCat(null)} />
-        <CatProfileCard
-          cat={selectedCat}
-          onEdit={(c) => setEditCat(c)}
-          onReportLost={(c) => setReportLostCat(c)}
-          onMarkHome={markHome}
-          onDelete={deleteCat}
-        />
-      </View>
-    );
-  }
 
   if (loading) {
     return (
@@ -255,43 +165,6 @@ export default function ProfileScreen({ onLogout }) {
             </>
           )}
         </View>
-
-        {/* My Family — น้องแมวของฉัน */}
-        <View style={styles.familyHead}>
-          <Text style={styles.familyTitle}>ครอบครัวของฉัน</Text>
-          <TouchableOpacity onPress={() => setShowAddCat(true)} activeOpacity={0.7}>
-            <Text style={styles.familyAdd}>เพิ่มใหม่ +</Text>
-          </TouchableOpacity>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.familyRow}
-        >
-          {myCats.map((c) => (
-            <TouchableOpacity key={c.id} style={styles.familyItem} onPress={() => setSelectedCat(c)} activeOpacity={0.7}>
-              <View style={styles.familyRing}>
-                {c.imageBase64 ? (
-                  <Image source={{ uri: `data:image/jpeg;base64,${c.imageBase64}` }} style={styles.familyAvatar} />
-                ) : (
-                  <View style={[styles.familyAvatar, styles.familyAvatarFallback]}>
-                    <Ionicons name="paw" size={22} color={colors.primary} />
-                  </View>
-                )}
-                {c.status === 'lost' && <View style={styles.familyLostDot} />}
-              </View>
-              <Text style={styles.familyName} numberOfLines={1}>{c.name}</Text>
-            </TouchableOpacity>
-          ))}
-
-          {/* ปุ่มเพิ่มสมาชิก */}
-          <TouchableOpacity style={styles.familyItem} onPress={() => setShowAddCat(true)} activeOpacity={0.7}>
-            <View style={styles.familyAddCircle}>
-              <Ionicons name="add" size={28} color={colors.primary} />
-            </View>
-            <Text style={[styles.familyName, { color: colors.sub }]}>เพิ่ม</Text>
-          </TouchableOpacity>
-        </ScrollView>
 
         {/* stats */}
         <View style={styles.statsRow}>
@@ -378,20 +251,7 @@ const styles = StyleSheet.create({
   editSave: { backgroundColor: colors.primary },
   editSaveText: { color: '#fff', fontWeight: '800' },
 
-  // My Family
-  familyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 24, marginBottom: 14, paddingHorizontal: 4 },
-  familyTitle: { fontSize: 18, fontWeight: '800', color: colors.text },
-  familyAdd: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  familyRow: { paddingHorizontal: 4, paddingBottom: 4, gap: 16 },
-  familyItem: { alignItems: 'center', width: 70 },
-  familyRing: { width: 66, height: 66, borderRadius: 33, borderWidth: 2, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  familyAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#eee' },
-  familyAvatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primarySoft },
-  familyLostDot: { position: 'absolute', right: 2, top: 2, width: 16, height: 16, borderRadius: 8, backgroundColor: colors.lost, borderWidth: 2, borderColor: colors.bg },
-  familyName: { fontSize: 12.5, fontWeight: '600', color: colors.text, marginTop: 7, maxWidth: 70, textAlign: 'center' },
-  familyAddCircle: { width: 66, height: 66, borderRadius: 33, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
-
-  statsRow: { flexDirection: 'row', gap: 14, marginTop: 20 },
+  statsRow: { flexDirection: 'row', gap: 14, marginTop: 16 },
   statCard: { flex: 1, backgroundColor: colors.card, borderRadius: radius.lg, padding: 20, alignItems: 'center', ...shadowSoft },
   statNum: { fontSize: 32, fontWeight: '800', color: colors.primary },
   statLabel: { fontSize: 13, color: colors.sub, marginTop: 4, fontWeight: '500' },

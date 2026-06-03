@@ -108,3 +108,12 @@ export function formatBirthDate(birthDate) {
   if (!b) return null;
   return `${b.getDate()} ${TH_MONTHS_SHORT[b.getMonth()]} ${b.getFullYear() + 543}`;
 }
+
+// แสดงอายุของแมว: คำนวณจากวันเกิด > ถ้าไม่ทราบ > ข้อมูลเก่า
+export function displayAge(cat) {
+  if (!cat) return null;
+  const a = ageText(cat.birthDate);
+  if (a) return a;
+  if (cat.ageUnknown) return 'ไม่ทราบ';
+  return cat.age || null;
+}

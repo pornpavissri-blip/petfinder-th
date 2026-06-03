@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, shadow, daysAgo, ageText } from '../theme';
+import { colors, radius, shadow, daysAgo, displayAge } from '../theme';
 import { formatDistance } from '../services/location';
 
 export default function PostDetail({ cat, distanceKm, onBack }) {
   const insets = useSafeAreaInsets();
-  const age = ageText(cat.birthDate) || cat.age;
+  const age = displayAge(cat);
 
   const callOwner = () => {
     Alert.alert('ติดต่อเจ้าของ', `โทรหา ${cat.ownerPhone} ?`, [

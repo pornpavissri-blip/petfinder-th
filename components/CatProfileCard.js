@@ -1,14 +1,13 @@
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, shadow, shadowSoft, statusInfo, daysAgo, ageText, formatBirthDate } from '../theme';
+import { colors, radius, shadow, shadowSoft, statusInfo, daysAgo, displayAge, formatBirthDate } from '../theme';
 
 export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, onDelete }) {
   const s = statusInfo(cat.status);
   const isLost = cat.status === 'lost';
 
-  const age = ageText(cat.birthDate);     // คำนวณจากวันเกิด
   const birth = formatBirthDate(cat.birthDate);
-  const ageDisplay = age || cat.age || null; // เผื่อข้อมูลเก่าที่ยังเป็นข้อความอายุ
+  const ageDisplay = displayAge(cat);
   const sexLabel = cat.sex === 'ผู้' ? '♂ ผู้' : cat.sex === 'เมีย' ? '♀ เมีย' : 'ไม่ระบุเพศ';
 
   return (
@@ -33,7 +32,7 @@ export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, 
             <Text style={styles.ageLabel}>อายุของน้อง</Text>
             <Text style={styles.ageValue}>{ageDisplay || 'ยังไม่ระบุ'}</Text>
             <Text style={styles.ageSince}>
-              {birth ? `เกิดวันที่ ${birth}` : 'แตะ "แก้ไขข้อมูล" เพื่อใส่วันเกิดน้อง'}
+              {birth ? `เกิดวันที่ ${birth}` : (cat.ageUnknown ? 'รับมาเลี้ยง • ไม่ทราบวันเกิด' : 'แตะ "แก้ไขข้อมูล" เพื่อใส่วันเกิดน้อง')}
             </Text>
           </View>
         </View>
