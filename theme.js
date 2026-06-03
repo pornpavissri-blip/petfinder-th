@@ -69,3 +69,42 @@ export function daysAgo(timestamp) {
   if (days === 1) return 'เมื่อวาน';
   return `${days} วันก่อน`;
 }
+
+// ---- อายุจากวันเกิด ----
+// birthDate เก็บเป็นสตริง 'YYYY-MM-DD'
+const TH_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+function parseBirth(birthDate) {
+  if (!birthDate) return null;
+  const d = new Date(`${birthDate}T00:00:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// คืนข้อความอายุแบบละเอียด เช่น "2 ปี 3 เดือน", "8 เดือน", "12 วัน"
+export function ageText(birthDate) {
+  const b = parseBirth(birthDate);
+  if (!b) return null;
+  const now = new Date();
+  let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth());
+  if (now.getDate() < b.getDate()) months--;
+  if (months < 0) months = 0;
+  const years = Math.floor(months / 12);
+  const m = months % 12;
+  if (years <= 0 && m <= 0) {
+    const days = Math.floor((now.getTime() - b.getTime()) / 86400000);
+    if (days <= 0) return 'แรกเกิด';
+    if (days < 30) return `${days} วัน`;
+    return '1 เดือน';
+  }
+  const parts = [];
+  if (years) parts.push(`${years} ปี`);
+  if (m) parts.push(`${m} เดือน`);
+  return parts.join(' ');
+}
+
+// คืนวันเกิดแบบไทย เช่น "12 มี.ค. 2566"
+export function formatBirthDate(birthDate) {
+  const b = parseBirth(birthDate);
+  if (!b) return null;
+  return `${b.getDate()} ${TH_MONTHS_SHORT[b.getMonth()]} ${b.getFullYear() + 543}`;
+}

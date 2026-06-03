@@ -37,6 +37,13 @@ function randColor() {
   return Math.random() < 0.4 ? 'ส้ม' : rand(COLORS);
 }
 
+// สุ่มวันเกิดย้อนหลัง ~6 ปี → 'YYYY-MM-DD'
+function randomBirth() {
+  const ago = randInt(60, 6 * 365);
+  const d = new Date(Date.now() - ago * 86400000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // สร้าง object หมุด "คนเจอแมว (อาจเป็นจร/หาย)"
 function makeSighting(lat, lng, img) {
   return {
@@ -84,6 +91,7 @@ export async function seedDemoCats(ownerPhone, count = 6) {
       color: randColor(),
       sex: rand(SEXES),
       breed: '',
+      birthDate: randomBirth(),
       age: '',
       notes: NOTES[i % NOTES.length],
       imageBase64: img,
@@ -235,6 +243,7 @@ export async function seedCountryCats(ownerPhone) {
         color: randColor(),
         sex: rand(SEXES),
         breed: '',
+        birthDate: randomBirth(),
         age: '',
         notes: rand(NOTES),
         imageBase64: img,
@@ -290,4 +299,4 @@ export async function clearDemoCats() {
   const sightSnap = await getDocs(query(collection(db, 'sightings'), where('demo', '==', true)));
   for (const d of sightSnap.docs) { await deleteDoc(doc(db, 'sightings', d.id)); n++; }
   return n;
-} 
+}

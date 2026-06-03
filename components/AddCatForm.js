@@ -7,25 +7,29 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import CatCamera from './CatCamera';
-import { colors, radius, shadow } from '../theme';
+import DOBPicker from './DOBPicker';
+import { colors, radius, shadow, ageText, formatBirthDate } from '../theme';
 
 export const CAT_COLORS = ['ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ลายเสือ', 'สามสี', 'ขาวดำ'];
 export const SEX_OPTIONS = ['ผู้', 'เมีย', 'ไม่ทราบ'];
 
-export default function AddCatForm({ onAdded }) {
-  const [imageUri, setImageUri] = useState(null);
-  const [imageBase64, setImageBase64] = useState(null);
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(null);
-  const [sex, setSex] = useState(null);
-  const [breed, setBreed] = useState('');
-  const [age, setAge] = useState('');
-  const [notes, setNotes] = useState('');
+// editCat = ส่งมาเมื่ออยู่ในโหมด "แก้ไข" (เติมข้อมูลเดิม + บันทึกทับ)
+export default function AddCatForm({ onAdded, editCat }) {
+  const isEdit = !!editCat;
+  const [imageUri, setImageUri] = useState(editCat ? `data:image/jpeg;base64,${editCat.imageBase64}` : null);
+  const [imageBase64, setImageBase64] = useState(editCat?.imageBase64 || null);
+  const [name, setName] = useState(editCat?.name || '');
+  const [color, setColor] = useState(editCat?.color || null);
+  const [sex, setSex] = useState(editCat?.sex || null);
+  const [breed, setBreed] = useState(editCat?.breed || '');
+  const [birthDate, setBirthDate] = useState(editCat?.birthDate || null); // 'YYYY-MM-DD'
+  const [notes, setNotes] = useState(editCat?.notes || '');
   const [saving, setSaving] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+  const [showDOB, setShowDOB] = useState(false);
 
   const processImage = async (uri) => {
     try {
@@ -58,20 +62,34 @@ export default function AddCatForm({ onAdded }) {
 
     setSaving(true);
     try {
-      const ownerPhone = await AsyncStorage.getItem('userPhone');
-      await addDoc(collection(db, 'cats'), {
-        ownerPhone,
-        name: name.trim(),
-        color,
-        sex: sex || 'ไม่ทราบ',
-        breed: breed.trim(),
-        age: age.trim(),
-        notes: notes.trim(),
-        imageBase64,
-        status: 'home',
-        createdAt: serverTimestamp(),
-      });
-      Alert.alert('สำเร็จ! 🎉', `เพิ่มน้อง "${name.trim()}" เรียบร้อยแล้ว`);
+      if (isEdit) {
+        // แก้ไข: อัปเดตเฉพาะข้อมูลที่แก้ได้ (ไม่แตะ age เดิม/สถานะหาย/พิกัด)
+        await updateDoc(doc(db, 'cats', editCat.id), {
+          name: name.trim(),
+          color,
+          sex: sex || 'ไม่ทราบ',
+          breed: breed.trim(),
+          birthDate: birthDate || '',
+          notes: notes.trim(),
+          imageBase64,
+        });
+        Alert.alert('บันทึกแล้ว ✏️', `อัปเดตข้อมูลน้อง "${name.trim()}" เรียบร้อย`);
+      } else {
+        const ownerPhone = await AsyncStorage.getItem('userPhone');
+        await addDoc(collection(db, 'cats'), {
+          ownerPhone,
+          name: name.trim(),
+          color,
+          sex: sex || 'ไม่ทราบ',
+          breed: breed.trim(),
+          birthDate: birthDate || '',
+          notes: notes.trim(),
+          imageBase64,
+          status: 'home',
+          createdAt: serverTimestamp(),
+        });
+        Alert.alert('สำเร็จ! 🎉', `เพิ่มน้อง "${name.trim()}" เรียบร้อยแล้ว`);
+      }
       onAdded?.();
     } catch (e) {
       console.log('Save error:', e);
@@ -134,16 +152,18 @@ export default function AddCatForm({ onAdded }) {
           })}
         </View>
 
-        <View style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>พันธุ์ (ถ้ามี)</Text>
-            <TextInput style={styles.input} placeholder="เช่น วิเชียรมาศ" placeholderTextColor={colors.faint} value={breed} onChangeText={setBreed} />
-          </View>
-          <View style={{ width: 110 }}>
-            <Text style={styles.label}>อายุ</Text>
-            <TextInput style={styles.input} placeholder="2 ปี" placeholderTextColor={colors.faint} value={age} onChangeText={setAge} />
-          </View>
-        </View>
+        <Text style={styles.label}>พันธุ์ (ถ้ามี)</Text>
+        <TextInput style={styles.input} placeholder="เช่น วิเชียรมาศ / ไทย" placeholderTextColor={colors.faint} value={breed} onChangeText={setBreed} />
+
+        <Text style={styles.label}>วันเกิด</Text>
+        <TouchableOpacity style={styles.dobField} onPress={() => setShowDOB(true)} activeOpacity={0.8}>
+          <Ionicons name="calendar" size={18} color={colors.primary} />
+          <Text style={[styles.dobText, !birthDate && { color: colors.faint }]}>
+            {birthDate ? formatBirthDate(birthDate) : 'เลือกวันเกิดน้อง'}
+          </Text>
+          {birthDate ? <Text style={styles.dobAge}>อายุ {ageText(birthDate)}</Text> : null}
+          <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+        </TouchableOpacity>
 
         <Text style={styles.label}>ลักษณะเด่น / หมายเหตุ</Text>
         <TextInput
@@ -157,7 +177,7 @@ export default function AddCatForm({ onAdded }) {
           {saving ? <ActivityIndicator color="#fff" /> : (
             <>
               <Ionicons name="checkmark-circle" size={20} color="#fff" />
-              <Text style={styles.saveText}>บันทึกน้องแมว</Text>
+              <Text style={styles.saveText}>{isEdit ? 'บันทึกการแก้ไข' : 'บันทึกน้องแมว'}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -168,6 +188,13 @@ export default function AddCatForm({ onAdded }) {
           visible={showCamera}
           onClose={() => setShowCamera(false)}
           onCapture={(uri) => { setShowCamera(false); processImage(uri); }}
+        />
+        {/* ตัวเลือกวันเกิด */}
+        <DOBPicker
+          visible={showDOB}
+          value={birthDate}
+          onCancel={() => setShowDOB(false)}
+          onConfirm={(s) => { setBirthDate(s); setShowDOB(false); }}
         />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -188,7 +215,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 20, marginBottom: 8 },
   input: { backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: 16, height: 52, fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border },
   textarea: { height: 96, paddingTop: 14, textAlignVertical: 'top' },
-  row: { flexDirection: 'row', gap: 12 },
+  dobField: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: 16, height: 52, borderWidth: 1, borderColor: colors.border },
+  dobText: { flex: 1, fontSize: 16, color: colors.text },
+  dobAge: { fontSize: 13, fontWeight: '700', color: colors.primary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
   chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.full, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },

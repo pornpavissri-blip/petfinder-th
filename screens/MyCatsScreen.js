@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import {
   StyleSheet, Text, View, FlatList, Image, TouchableOpacity,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import GradientHeader from '../components/GradientHeader';
 import AddCatForm from '../components/AddCatForm';
@@ -14,8 +15,11 @@ import ReportLostForm from '../components/ReportLostForm';
 import { colors, radius, shadow, statusInfo } from '../theme';
 
 export default function MyCatsScreen() {
+  const insets = useSafeAreaInsets();
   const [showForm, setShowForm] = useState(false);
   const [reportLostCat, setReportLostCat] = useState(null);
+  const [editCat, setEditCat] = useState(null);
+  const [menuCat, setMenuCat] = useState(null);
   const [cats, setCats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,12 +57,35 @@ export default function MyCatsScreen() {
     ]);
   };
 
+  const deleteCat = (cat) => {
+    Alert.alert('ลบน้องแมว?', `จะลบน้อง "${cat.name}" ออกถาวร กู้คืนไม่ได้`, [
+      { text: 'ยกเลิก', style: 'cancel' },
+      {
+        text: 'ลบ', style: 'destructive',
+        onPress: async () => {
+          try { await deleteDoc(doc(db, 'cats', cat.id)); fetchCats(); }
+          catch (e) { console.log('Delete error:', e); Alert.alert('ผิดพลาด', 'ลบไม่สำเร็จ ลองใหม่'); }
+        },
+      },
+    ]);
+  };
+
   // ---- Add form ----
   if (showForm) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <GradientHeader title="เพิ่มน้องแมว" subtitle="ลงทะเบียนเพื่อให้ตามหาได้ง่าย" emoji="🐾" onClose={() => setShowForm(false)} />
         <AddCatForm onAdded={() => { setShowForm(false); fetchCats(); }} />
+      </View>
+    );
+  }
+
+  // ---- Edit form ----
+  if (editCat) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <GradientHeader title="แก้ไขข้อมูลน้อง" subtitle={editCat.name} emoji="✏️" onClose={() => setEditCat(null)} />
+        <AddCatForm editCat={editCat} onAdded={() => { setEditCat(null); fetchCats(); }} />
       </View>
     );
   }
@@ -83,11 +110,14 @@ export default function MyCatsScreen() {
         <Image source={{ uri: `data:image/jpeg;base64,${item.imageBase64}` }} style={styles.catImage} />
         <View style={styles.catBody}>
           <View style={styles.catTop}>
-            <Text style={styles.catName}>{item.name}</Text>
+            <Text style={styles.catName} numberOfLines={1}>{item.name}</Text>
             <View style={[styles.badge, { backgroundColor: s.soft }]}>
               <Ionicons name={s.icon} size={13} color={s.color} />
               <Text style={[styles.badgeText, { color: s.color }]}>{s.label}</Text>
             </View>
+            <TouchableOpacity style={styles.kebab} onPress={() => setMenuCat(item)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="ellipsis-vertical" size={18} color={colors.sub} />
+            </TouchableOpacity>
           </View>
           <Text style={styles.catMeta}>สี{item.color}{item.breed ? ` • ${item.breed}` : ''}{item.age ? ` • ${item.age}` : ''}{item.sex === 'ผู้' ? ' • ♂ ผู้' : item.sex === 'เมีย' ? ' • ♀ เมีย' : ''}</Text>
           {isLost && item.reward > 0 && (
@@ -140,20 +170,55 @@ export default function MyCatsScreen() {
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* เมนูจัดการน้องแมว (แก้ไข / ลบ) */}
+      <Modal visible={!!menuCat} transparent animationType="slide" onRequestClose={() => setMenuCat(null)}>
+        <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setMenuCat(null)}>
+          <TouchableOpacity activeOpacity={1} style={[styles.sheet, { paddingBottom: insets.bottom + 14 }]} onPress={() => {}}>
+            <View style={styles.grabber} />
+            {menuCat && (
+              <View style={styles.sheetHead}>
+                <Image source={{ uri: `data:image/jpeg;base64,${menuCat.imageBase64}` }} style={styles.sheetThumb} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sheetName} numberOfLines={1}>{menuCat.name}</Text>
+                  <Text style={styles.sheetSub}>จัดการข้อมูลน้องแมว</Text>
+                </View>
+              </View>
+            )}
+            <TouchableOpacity style={styles.sheetOpt} onPress={() => { const c = menuCat; setMenuCat(null); setEditCat(c); }}>
+              <View style={[styles.sheetIcon, { backgroundColor: colors.primarySoft }]}>
+                <Ionicons name="create-outline" size={20} color={colors.primary} />
+              </View>
+              <Text style={styles.sheetOptText}>แก้ไขข้อมูล</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetOpt} onPress={() => { const c = menuCat; setMenuCat(null); deleteCat(c); }}>
+              <View style={[styles.sheetIcon, { backgroundColor: colors.lostSoft }]}>
+                <Ionicons name="trash-outline" size={20} color={colors.lost} />
+              </View>
+              <Text style={[styles.sheetOptText, { color: colors.lost }]}>ลบน้องแมว</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.faint} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sheetCancel} onPress={() => setMenuCat(null)}>
+              <Text style={styles.sheetCancelText}>ยกเลิก</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  closeBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
   card: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: radius.lg, marginBottom: 14, overflow: 'hidden', ...shadow },
   catImage: { width: 120, minHeight: 150, backgroundColor: '#eee' },
   catBody: { flex: 1, padding: 14 },
-  catTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  catTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   catName: { fontSize: 19, fontWeight: '800', color: colors.text, flex: 1 },
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.full },
   badgeText: { fontSize: 12, fontWeight: '700' },
+  kebab: { padding: 2, marginRight: -4 },
   catMeta: { fontSize: 13, color: colors.sub, marginTop: 5 },
   rewardLine: { fontSize: 13, fontWeight: '700', color: colors.reward, marginTop: 6 },
   catNotes: { fontSize: 12.5, color: colors.faint, marginTop: 6, lineHeight: 18 },
@@ -168,4 +233,18 @@ const styles = StyleSheet.create({
   emptyBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 24, height: 52, borderRadius: radius.full },
   emptyBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
   fab: { position: 'absolute', right: 20, bottom: 24, width: 60, height: 60, borderRadius: 30, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', ...shadow },
+
+  // bottom sheet
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: colors.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: 20, paddingTop: 10 },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border, marginBottom: 14 },
+  sheetHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 14, marginBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.border },
+  sheetThumb: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: '#eee' },
+  sheetName: { fontSize: 17, fontWeight: '800', color: colors.text },
+  sheetSub: { fontSize: 13, color: colors.sub, marginTop: 2 },
+  sheetOpt: { flexDirection: 'row', alignItems: 'center', gap: 14, height: 60 },
+  sheetIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  sheetOptText: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text },
+  sheetCancel: { height: 52, borderRadius: radius.md, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  sheetCancelText: { fontSize: 16, fontWeight: '800', color: colors.sub },
 });
