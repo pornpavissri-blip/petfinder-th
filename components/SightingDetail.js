@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert, ActivityIndicator, Dimensions } from 'react-native';
-import { StyleSheet, Text, View, Image, TouchableOpacity, ScrollView, Linking, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,10 +11,11 @@ export default function SightingDetail({ sighting, distanceKm, onBack, onViewOnM
   const insets = useSafeAreaInsets();
   const [chatLoading, setChatLoading] = useState(false);
 
-
+  // ---- รูปหลายรูป (เลื่อนดูได้) ----
   const { width } = Dimensions.get('window');
   const images = sighting.images?.length ? sighting.images : [sighting.imageBase64];
   const [index, setIndex] = useState(0);
+
   const callFinder = () => {
     Alert.alert('ติดต่อผู้พบเห็น', `โทรหา ${sighting.finderPhone} ?`, [
       { text: 'ยกเลิก', style: 'cancel' },
@@ -64,7 +64,16 @@ export default function SightingDetail({ sighting, distanceKm, onBack, onViewOnM
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.imgWrap}>
-        <Image source={{ uri: `data:image/jpeg;base64,${sighting.imageBase64}` }} style={styles.img} />
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+        >
+          {images.map((b64, i) => (
+            <Image key={i} source={{ uri: `data:image/jpeg;base64,${b64}` }} style={{ width, height: width, backgroundColor: '#eee' }} />
+          ))}
+        </ScrollView>
         <TouchableOpacity style={[styles.back, { top: insets.top + 6 }]} onPress={onBack}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
@@ -74,7 +83,6 @@ export default function SightingDetail({ sighting, distanceKm, onBack, onViewOnM
             {isLost ? 'มั่นใจว่าแมวหาย' : 'อาจเป็นจร/หาย'} • {daysAgo(sighting.createdAt)}
           </Text>
         </View>
-
         {images.length > 1 && (
           <>
             <View style={[styles.counter, { top: insets.top + 8 }]}>
@@ -87,8 +95,6 @@ export default function SightingDetail({ sighting, distanceKm, onBack, onViewOnM
             </View>
           </>
         )}
-=======
->>>>>>> ac516286c8d76253b52bd8659885d3c81c511386
       </View>
 
       <View style={styles.body}>
@@ -150,13 +156,11 @@ const styles = StyleSheet.create({
   back: { position: 'absolute', left: 16, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
   lostBadge: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.full },
   lostBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-
   counter: { position: 'absolute', right: 16, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 11, paddingVertical: 5, borderRadius: radius.full },
   counterText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   dots: { position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', gap: 6 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.55)' },
   dotActive: { backgroundColor: '#fff', width: 20 },
-
 
   body: { padding: 20 },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
