@@ -42,7 +42,7 @@ export default function CatProfileCard({ cat, onEdit, onReportLost, onMarkHome, 
         {/* หัวบัตร */}
         <View style={styles.cardHeader}>
           <Ionicons name="paw" size={18} color="#fff" />
-          <Text style={styles.cardHeaderTitle}>บัตรประจำตัวประชากรแมว (CAT ID CARD)</Text>
+          <Text style={styles.cardHeaderTitle}>บัตรประจำตัวประชากรแมว</Text>
         </View>
 
         {/* เนื้อหาภายในบัตร */}
