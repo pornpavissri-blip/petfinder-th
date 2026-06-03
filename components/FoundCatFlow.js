@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -11,6 +12,7 @@ import { findMatches } from '../services/aiMatch';
 import { getCurrentCoords } from '../services/location';
 import { CAT_COLORS } from './AddCatForm';
 import MapPicker from './MapPicker';
+import CatCamera from './CatCamera';
 import { colors, radius, shadow } from '../theme';
 
 export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onBack, onPinnedDone }) {
@@ -25,6 +27,11 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
   const [picked, setPicked] = useState(null);
   const [showPicker, setShowPicker] = useState(false);
 
+  // ---- รูปเพิ่มเติม (เลื่อนดูได้) ----
+  const [extraImages, setExtraImages] = useState([]); // base64 เพิ่มเติม นอกจากรูปหลัก
+  const [addingPhoto, setAddingPhoto] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+
   const scan = async (c) => {
     setColor(c);
     setStep('scanning');
@@ -34,6 +41,46 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
     setStep('result');
   };
 
+  const MAX_EXTRA = 4; // เพิ่มได้อีก 4 (รวมรูปหลักเป็น 5)
+
+  const resizeToBase64 = async (uri) => {
+    const m = await ImageManipulator.manipulateAsync(
+      uri, [{ resize: { width: 600 } }],
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    return m.base64;
+  };
+
+  const addFromGallery = async () => {
+    if (extraImages.length >= MAX_EXTRA) { Alert.alert('เต็มแล้ว', `เพิ่มรูปได้อีกไม่เกิน ${MAX_EXTRA} รูป`); return; }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') { Alert.alert('ต้องการสิทธิ์', 'อนุญาตการเข้าถึงคลังรูปภาพ'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'], allowsMultipleSelection: true,
+      selectionLimit: MAX_EXTRA - extraImages.length, quality: 0.7,
+    });
+    if (res.canceled) return;
+    setAddingPhoto(true);
+    try {
+      const added = [];
+      for (const a of res.assets) added.push(await resizeToBase64(a.uri));
+      setExtraImages((p) => [...p, ...added].slice(0, MAX_EXTRA));
+    } catch (e) { console.log('Add photo error:', e); Alert.alert('รูปมีปัญหา', 'ลองใหม่อีกครั้ง'); }
+    setAddingPhoto(false);
+  };
+
+  const addFromCamera = async (uri) => {
+    setShowCamera(false);
+    setAddingPhoto(true);
+    try {
+      const b64 = await resizeToBase64(uri);
+      setExtraImages((p) => (p.length >= MAX_EXTRA ? p : [...p, b64]));
+    } catch (e) { console.log('Add photo error:', e); }
+    setAddingPhoto(false);
+  };
+
+  const removeExtra = (idx) => setExtraImages((p) => p.filter((_, i) => i !== idx));
+
   const pin = async (confidence) => {
     if (locMode === 'manual' && !picked) {
       Alert.alert('ยังไม่ได้เลือกตำแหน่ง', 'แตะ "ปักจุดเอง" แล้วเลือกจุดบนแผนที่ก่อน');
@@ -41,11 +88,9 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
     }
     setPinning(true);
     try {
-      // ย่อรูปที่ถ่าย → base64 เก็บไว้โชว์บนแผนที่
-      const img = await ImageManipulator.manipulateAsync(
-        foundImageUri, [{ resize: { width: 600 } }],
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-      );
+      // ย่อรูปหลัก + รวมกับรูปที่เพิ่มเข้ามา (เลื่อนดูได้)
+      const primaryBase64 = await resizeToBase64(foundImageUri);
+      const images = [primaryBase64, ...extraImages];
 
       // ใช้ตำแหน่งตามที่เลือก
       let coords;
@@ -57,7 +102,8 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
 
       const data = {
         finderPhone,
-        imageBase64: img.base64,
+        imageBase64: images[0], // รูปหลัก (โชว์บนหมุด/การ์ด)
+        images,                 // ทุกรูป (เลื่อนดูในหน้ารายละเอียด)
         color,
         confidence, // 'lost' (มั่นใจว่าหาย) | 'maybe' (อาจเป็นจร/หาย)
         matchedCatId: matched?.id || null,
@@ -160,6 +206,42 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
             );
           })}
 
+          {/* เพิ่มรูปแมว (เลื่อนดูได้) */}
+          <View style={styles.photosBox}>
+            <Text style={styles.photosTitle}>📷 รูปแมว ({1 + extraImages.length})</Text>
+            <Text style={styles.photosHint}>เพิ่มได้หลายรูป เจ้าของจะได้เห็นชัดขึ้น</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbRow}>
+              <View style={styles.thumbWrap}>
+                <Image source={{ uri: foundImageUri }} style={styles.thumb} />
+                <View style={styles.thumbMain}><Text style={styles.thumbMainText}>รูปหลัก</Text></View>
+              </View>
+              {extraImages.map((b64, i) => (
+                <View key={i} style={styles.thumbWrap}>
+                  <Image source={{ uri: `data:image/jpeg;base64,${b64}` }} style={styles.thumb} />
+                  <TouchableOpacity style={styles.thumbRemove} onPress={() => removeExtra(i)}>
+                    <Ionicons name="close" size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {extraImages.length < MAX_EXTRA && (
+                <>
+                  <TouchableOpacity style={styles.addTile} onPress={() => setShowCamera(true)} disabled={addingPhoto}>
+                    <Ionicons name="camera" size={22} color={colors.primary} />
+                    <Text style={styles.addTileText}>ถ่าย</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.addTile} onPress={addFromGallery} disabled={addingPhoto}>
+                    {addingPhoto ? <ActivityIndicator color={colors.primary} /> : (
+                      <>
+                        <Ionicons name="images" size={22} color={colors.primary} />
+                        <Text style={styles.addTileText}>คลัง</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+
           {/* เลือกตำแหน่งที่เจอ */}
           <View style={styles.locChooser}>
             <Text style={styles.locTitle}>📍 ตำแหน่งที่เจอแมว</Text>
@@ -250,6 +332,7 @@ export default function FoundCatFlow({ foundImageUri, lostCats, finderPhone, onB
         onCancel={() => { setShowPicker(false); if (!picked) setLocMode('current'); }}
         onConfirm={(c) => { setPicked(c); setShowPicker(false); }}
       />
+      <CatCamera visible={showCamera} onClose={() => setShowCamera(false)} onCapture={addFromCamera} />
     </ScrollView>
   );
 }
@@ -324,4 +407,16 @@ const styles = StyleSheet.create({
   noGps: { fontSize: 12, color: colors.faint, marginTop: 12 },
   doneBtn: { marginTop: 18, paddingVertical: 12, paddingHorizontal: 30 },
   doneText: { color: colors.primary, fontWeight: '800', fontSize: 16 },
+
+  photosBox: { backgroundColor: colors.card, borderRadius: radius.lg, padding: 18, marginTop: 16, ...shadow },
+  photosTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  photosHint: { fontSize: 13, color: colors.sub, marginTop: 4, marginBottom: 12 },
+  thumbRow: { gap: 10, paddingVertical: 2 },
+  thumbWrap: { width: 84, height: 84, borderRadius: radius.md, overflow: 'hidden', position: 'relative', backgroundColor: '#eee' },
+  thumb: { width: 84, height: 84 },
+  thumbMain: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.55)', paddingVertical: 2, alignItems: 'center' },
+  thumbMainText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  thumbRemove: { position: 'absolute', top: 3, right: 3, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
+  addTile: { width: 84, height: 84, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.bg },
+  addTileText: { fontSize: 12, fontWeight: '700', color: colors.primary },
 });
